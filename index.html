@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MLF — Marketing Lead Finder | Pro-Factor</title>
+<style>
+  :root {
+    --l1: #16a34a; --l2: #65a30d; --l3: #d97706; --l4: #9ca3af;
+    --bg: #f8f7f5; --card: #ffffff; --ink: #1f2937; --muted: #6b7280;
+    --accent: #c2410c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--ink);
+  }
+  header {
+    background: #1f2937; color: white; padding: 16px 20px;
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+  }
+  header h1 { font-size: 18px; margin: 0; }
+  header .sub { color: #9ca3af; font-size: 13px; }
+  main { max-width: 900px; margin: 0 auto; padding: 20px 16px 80px; }
+  .search-box {
+    background: var(--card); border-radius: 12px; padding: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 20px;
+  }
+  .search-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  input[type=text] {
+    flex: 1; min-width: 180px; padding: 10px 12px; border: 1px solid #d1d5db;
+    border-radius: 8px; font-size: 15px;
+  }
+  button {
+    background: var(--accent); color: white; border: none; border-radius: 8px;
+    padding: 10px 18px; font-size: 15px; cursor: pointer;
+  }
+  button:disabled { background: #d1d5db; cursor: default; }
+  .worker-url-row { margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .worker-url-row input { width: 100%; margin-top: 4px; font-size: 13px; padding: 6px 8px; }
+  .status { margin: 12px 0; color: var(--muted); font-size: 14px; }
+  .level-group { margin-bottom: 24px; }
+  .level-title {
+    font-weight: 700; font-size: 15px; margin: 0 0 8px 4px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .card {
+    background: var(--card); border-radius: 10px; padding: 12px 14px;
+    margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    border-left: 4px solid transparent;
+  }
+  .card.L1 { border-left-color: var(--l1); }
+  .card.L2 { border-left-color: var(--l2); }
+  .card.L3 { border-left-color: var(--l3); }
+  .card.L4 { border-left-color: var(--l4); }
+  .card-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .card-name { font-weight: 600; font-size: 15px; }
+  .card-score { font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .card-meta { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .card-duvody { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  .card-links { margin-top: 8px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .card-links a {
+    font-size: 12px; color: var(--accent); text-decoration: none;
+    border: 1px solid var(--accent); border-radius: 6px; padding: 3px 8px;
+  }
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🔎 MLF — Marketing Lead Finder</h1>
+    <div class="sub">Pro-Factor · filtr potenciálních zájemců o inzerci</div>
+  </div>
+  <div class="sub">v1 · Rychnovsko pilot</div>
+</header>
+
+<main>
+  <div class="search-box">
+    <div class="search-row">
+      <input type="text" id="obecInput" placeholder="Obec (např. Rychnov nad Kněžnou)" value="Rychnov nad Kněžnou" />
+      <button id="searchBtn">Hledat</button>
+    </div>
+    <div class="worker-url-row">
+      Adresa Worker proxy (vyplň jednou, appka si ji zapamatuje v prohlížeči):
+      <input type="text" id="workerUrl" placeholder="https://tvuj-worker.tvuj-ucet.workers.dev" />
+    </div>
+  </div>
+
+  <div id="status" class="status"></div>
+  <div id="results"></div>
+</main>
+
+<script>
+const LEVELS = {
+  1: { label: "Úroveň 1 — nejvhodnější, navštívit první", color: "var(--l1)" },
+  2: { label: "Úroveň 2 — dobří kandidáti", color: "var(--l2)" },
+  3: { label: "Úroveň 3 — možní, nižší priorita", color: "var(--l3)" },
+  4: { label: "Úroveň 4 — nevhodné, ale nemazáno", color: "var(--l4)" },
+};
+
+const workerUrlInput = document.getElementById("workerUrl");
+const obecInput = document.getElementById("obecInput");
+const statusEl = document.getElementById("status");
+const resultsEl = document.getElementById("results");
+const searchBtn = document.getElementById("searchBtn");
+
+// zapamatovat worker URL v prohlížeči (jen tento prohlížeč/zařízení)
+workerUrlInput.value = localStorage.getItem("mlf_worker_url") || "";
+workerUrlInput.addEventListener("change", () => {
+  localStorage.setItem("mlf_worker_url", workerUrlInput.value.trim());
+});
+
+function odkazyNaFirmu(nazev, obec) {
+  const q = encodeURIComponent(`${nazev} ${obec}`);
+  return `
+    <div class="card-links">
+      <a href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener">Google</a>
+      <a href="https://www.facebook.com/ads/library/?q=${encodeURIComponent(nazev)}" target="_blank" rel="noopener">Meta Ad Library</a>
+      <a href="https://adstransparency.google.com/?region=CZ&domain=&q=${encodeURIComponent(nazev)}" target="_blank" rel="noopener">Google Ads Transparency</a>
+    </div>`;
+}
+
+function vykresli(firmy) {
+  resultsEl.innerHTML = "";
+  if (!firmy.length) {
+    resultsEl.innerHTML = `<div class="empty">Žádné firmy nenalezeny — zkus jiný název obce.</div>`;
+    return;
+  }
+  for (const uroven of [1, 2, 3, 4]) {
+    const skupina = firmy.filter((f) => f.uroven === uroven);
+    if (!skupina.length) continue;
+    const wrap = document.createElement("div");
+    wrap.className = "level-group";
+    wrap.innerHTML = `<div class="level-title"><span class="dot" style="background:${LEVELS[uroven].color}"></span>${LEVELS[uroven].label} (${skupina.length})</div>`;
+    for (const f of skupina) {
+      const card = document.createElement("div");
+      card.className = `card L${uroven}`;
+      card.innerHTML = `
+        <div class="card-top">
+          <div class="card-name">${f.nazev || "(bez názvu)"}</div>
+          <div class="card-score">skóre ${f.skore}/100</div>
+        </div>
+        <div class="card-meta">IČO ${f.ico} · ${f.adresa || f.obec || ""} · obor: ${(f.czNace || []).join(", ") || "neuvedeno"}</div>
+        <div class="card-duvody">${(f.duvody || []).join(" · ")}</div>
+        ${odkazyNaFirmu(f.nazev, f.obec)}
+      `;
+      wrap.appendChild(card);
+    }
+    resultsEl.appendChild(wrap);
+  }
+}
+
+async function hledej() {
+  const workerUrl = workerUrlInput.value.trim();
+  const obec = obecInput.value.trim();
+  if (!workerUrl) {
+    statusEl.textContent = "⚠️ Nejdřív vyplň adresu Worker proxy nahoře.";
+    return;
+  }
+  if (!obec) return;
+
+  searchBtn.disabled = true;
+  statusEl.textContent = "Hledám v ARES...";
+  resultsEl.innerHTML = "";
+
+  try {
+    const resp = await fetch(`${workerUrl.replace(/\/$/, "")}/search?obec=${encodeURIComponent(obec)}`);
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    statusEl.textContent = `Nalezeno celkem ${data.pocetCelkem}, zobrazeno ${data.vraceno}.`;
+    vykresli(data.firmy || []);
+  } catch (e) {
+    statusEl.textContent = `❌ Chyba: ${e.message}`;
+  } finally {
+    searchBtn.disabled = false;
+  }
+}
+
+searchBtn.addEventListener("click", hledej);
+obecInput.addEventListener("keydown", (e) => { if (e.key === "Enter") hledej(); });
+</script>
+
+</body>
+</html>
