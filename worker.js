@@ -110,12 +110,15 @@ function skoreFirmy(subjekt) {
   return { skore, uroven, duvody };
 }
 
-async function hledejFirmy(kodObce, naceList, start = 0, pocet = 50) {
+async function hledejFirmy(kodObce, naceList, pravniFormaList, start = 0, pocet = 50) {
   const filtr = {
     sidlo: { kodObce },
     start,
     pocet,
   };
+  if (pravniFormaList && pravniFormaList.length > 0) {
+    filtr.pravniForma = pravniFormaList;
+  }
   if (naceList && naceList.length > 0) {
     filtr.czNace = naceList;
   }
@@ -163,9 +166,11 @@ export default {
       }
 
       const naceList = naceParam ? naceParam.split(",").map((s) => s.trim()) : null;
+      const pfParam = url.searchParams.get("pravniForma"); // čárkou oddělené kódy, volitelné
+      const pravniFormaList = pfParam ? pfParam.split(",").map((s) => s.trim()) : null;
 
       try {
-        const vysledek = await hledejFirmy(kodObce, naceList, start, 50);
+        const vysledek = await hledejFirmy(kodObce, naceList, pravniFormaList, start, 50);
         const subjekty = (vysledek.ekonomickeSubjekty || []).map((s) => {
           const { skore, uroven, duvody } = skoreFirmy(s);
           return {
