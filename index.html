@@ -74,9 +74,44 @@
     border: 1px solid var(--accent);
   }
   .load-more-btn:disabled { opacity: 0.5; }
+  .status-bar {
+    display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; align-items: center;
+  }
+  .status-btn {
+    font-size: 12px; padding: 5px 10px; border-radius: 6px; border: 1px solid #d1d5db;
+    background: white; cursor: pointer; color: var(--ink);
+  }
+  .status-btn.active-K { background: #16a34a; color: white; border-color: #16a34a; }
+  .status-btn.active-P { background: #d97706; color: white; border-color: #d97706; }
+  .status-btn.active-O { background: #eab308; color: white; border-color: #eab308; }
+  .status-btn.active-N { background: #dc2626; color: white; border-color: #dc2626; }
+  .status-btn.active-X { background: #9ca3af; color: white; border-color: #9ca3af; }
+  .status-btn.active-Z { background: #64748b; color: white; border-color: #64748b; }
+  .poznamka-input {
+    width: 100%; margin-top: 6px; padding: 6px 8px; border: 1px solid #d1d5db;
+    border-radius: 6px; font-size: 13px;
+  }
+  .card.collapsed { padding: 8px 14px; }
+  .card.collapsed .card-body { display: none; }
+  .card-collapsed-row {
+    display: flex; justify-content: space-between; align-items: center; cursor: pointer;
+  }
+  .status-badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 10px; color: white; white-space: nowrap;
+  }
+  .toggle-hidden-row { margin: 8px 0 16px; font-size: 13px; }
+  .toggle-hidden-row label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  .firebase-warning {
+    background: #fef3c7; border: 1px solid #d97706; border-radius: 8px; padding: 10px 14px;
+    font-size: 13px; margin-bottom: 16px; display: none;
+  }
 </style>
 </head>
 <body>
+
+<div id="firebaseWarning" class="firebase-warning">
+  ⚠️ Firestore config zatím nevyplněný — hledání a skórování funguje, ale zápisy stavu (koupili/odmítli/...) se zatím neuloží. Doplň <code>firebaseConfig</code> v index.html.
+</div>
 
 <header>
   <div>
@@ -110,11 +145,75 @@
       <option value="nazev">Název (A–Z)</option>
     </select>
   </div>
+  <div id="toggleHiddenRow" class="toggle-hidden-row" style="display:none;">
+    <label><input type="checkbox" id="toggleHidden" checked /> Zobrazit i vyřízené (sbalené)</label>
+  </div>
   <div id="results"></div>
   <button id="loadMoreBtn" class="load-more-btn" style="display:none;">Načíst dalších 50</button>
 </main>
 
-<script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getFirestore, doc, setDoc, getDocs, collection,
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+/**
+ * DOPLNIT: vlož sem firebaseConfig ze svého Firebase projektu
+ * (Project settings → Your apps → Web app → config).
+ * Dokud je tohle placeholder, appka hledá/skóruje normálně,
+ * jen ukládání stavů (K/P/O/N/...) nebude fungovat.
+ */
+const firebaseConfig = {
+  apiKey: "AIzaSyC8UJDYNq5bujW9afcfpVvFfPFnr7M2hO0",
+  authDomain: "mlf-tipster-pf.firebaseapp.com",
+  projectId: "mlf-tipster-pf",
+  storageBucket: "mlf-tipster-pf.firebasestorage.app",
+  messagingSenderId: "548764247414",
+  appId: "1:548764247414:web:da8c38ba5a33bc927a8657",
+};
+
+const FIREBASE_HOTOVO = firebaseConfig.apiKey !== "DOPLNIT";
+let db = null;
+if (FIREBASE_HOTOVO) {
+  const fbApp = initializeApp(firebaseConfig);
+  db = getFirestore(fbApp);
+} else {
+  document.getElementById("firebaseWarning").style.display = "block";
+}
+
+const STATUS_KOLEKCE = "mlf_firmy_status";
+
+const STAVY = {
+  K: { label: "Koupili", color: "#16a34a" },
+  P: { label: "Zájem, jedná se", color: "#d97706" },
+  O: { label: "Osloveno, čeká se", color: "#eab308" },
+  N: { label: "Odmítli", color: "#dc2626" },
+  Z: { label: "Nemá koncového zákazníka v místě", color: "#64748b" },
+  X: { label: "Nezastiženo", color: "#9ca3af" },
+};
+
+// lokální cache stavů: { ico: { status, poznamka, autor, datum } }
+let stavyMap = {};
+
+async function nactiVsechnyStavy() {
+  if (!db) return {};
+  const snap = await getDocs(collection(db, STATUS_KOLEKCE));
+  const mapa = {};
+  snap.forEach((d) => { mapa[d.id] = d.data(); });
+  return mapa;
+}
+
+async function ulozStav(ico, status, poznamka) {
+  if (!db) {
+    alert("Firestore config zatím není vyplněný — stav se neuloží. Doplň firebaseConfig v index.html.");
+    return;
+  }
+  const zaznam = { status, poznamka: poznamka || "", datum: new Date().toISOString() };
+  await setDoc(doc(db, STATUS_KOLEKCE, ico), zaznam, { merge: true });
+  stavyMap[ico] = { ...stavyMap[ico], ...zaznam };
+}
+
 const LEVELS = {
   1: { label: "Úroveň 1 — nejvhodnější, navštívit první", color: "var(--l1)" },
   2: { label: "Úroveň 2 — dobří kandidáti", color: "var(--l2)" },
@@ -130,6 +229,8 @@ const searchBtn = document.getElementById("searchBtn");
 const loadMoreBtn = document.getElementById("loadMoreBtn");
 const controlsRow = document.getElementById("controlsRow");
 const sortSelect = document.getElementById("sortSelect");
+const toggleHiddenRow = document.getElementById("toggleHiddenRow");
+const toggleHidden = document.getElementById("toggleHidden");
 
 // stav aktuálního hledání (pro stránkování a řazení)
 let vsechnyFirmy = [];
@@ -187,19 +288,35 @@ function serazeneFirmy() {
   return kopie;
 }
 
+function statusBarHtml(ico) {
+  const aktualni = stavyMap[ico]?.status;
+  const tlacitka = Object.entries(STAVY).map(([kod, info]) => {
+    const aktivni = aktualni === kod ? `active-${kod}` : "";
+    return `<button class="status-btn ${aktivni}" data-ico="${ico}" data-status="${kod}">${info.label}</button>`;
+  }).join("");
+  const poznamka = stavyMap[ico]?.poznamka || "";
+  return `
+    <div class="status-bar">${tlacitka}</div>
+    <input type="text" class="poznamka-input" placeholder="Poznámka (volitelné)" data-ico="${ico}" value="${poznamka.replace(/"/g, "&quot;")}" />
+  `;
+}
+
 function vykresli() {
-  const firmy = serazeneFirmy();
+  const zobrazVyrizene = toggleHidden.checked;
+  let firmy = serazeneFirmy();
   resultsEl.innerHTML = "";
   if (!firmy.length) {
     resultsEl.innerHTML = `<div class="empty">Žádné firmy nenalezeny — zkus jiný název obce.</div>`;
     return;
   }
-  // při řazení jiném než skóre nemá smysl dělit do úrovní vizuálně oddělenými skupinami
   const podleUrovne = sortSelect.value === "skore";
   const urovneKZobrazeni = podleUrovne ? [1, 2, 3, 4] : ["vse"];
 
   for (const uroven of urovneKZobrazeni) {
-    const skupina = podleUrovne ? firmy.filter((f) => f.uroven === uroven) : firmy;
+    let skupina = podleUrovne ? firmy.filter((f) => f.uroven === uroven) : firmy;
+    if (!zobrazVyrizene) {
+      skupina = skupina.filter((f) => !stavyMap[f.ico]?.status);
+    }
     if (!skupina.length) continue;
     const wrap = document.createElement("div");
     wrap.className = "level-group";
@@ -207,23 +324,74 @@ function vykresli() {
       wrap.innerHTML = `<div class="level-title"><span class="dot" style="background:${LEVELS[uroven].color}"></span>${LEVELS[uroven].label} (${skupina.length})</div>`;
     }
     for (const f of skupina) {
+      const stavZaznam = stavyMap[f.ico];
+      const jeSbaleno = !!stavZaznam?.status;
       const card = document.createElement("div");
-      card.className = `card L${f.uroven}`;
+      card.className = `card L${f.uroven}${jeSbaleno ? " collapsed" : ""}`;
+      card.dataset.ico = f.ico;
       const obory = (f.czNace || []).map(nazevOboru).join(", ") || "neuvedeno";
-      card.innerHTML = `
-        <div class="card-top">
-          <div class="card-name">${f.nazev || "(bez názvu)"}</div>
-          <div class="card-score">skóre ${f.skore}/100</div>
-        </div>
-        <div class="card-meta">IČO ${f.ico} · ${f.adresa || f.obec || ""} · obor: ${obory}</div>
-        <div class="card-duvody">${(f.duvody || []).join(" · ")}</div>
-        ${odkazyNaFirmu(f.nazev, f.obec)}
-      `;
+
+      if (jeSbaleno) {
+        const info = STAVY[stavZaznam.status];
+        card.innerHTML = `
+          <div class="card-collapsed-row" data-toggle="${f.ico}">
+            <div class="card-name">${f.nazev || "(bez názvu)"}</div>
+            <span class="status-badge" style="background:${info.color}">${info.label}</span>
+          </div>
+          <div class="card-body">
+            <div class="card-meta">IČO ${f.ico} · ${f.adresa || f.obec || ""} · obor: ${obory}</div>
+            ${statusBarHtml(f.ico)}
+            ${odkazyNaFirmu(f.nazev, f.obec)}
+          </div>
+        `;
+      } else {
+        card.innerHTML = `
+          <div class="card-top">
+            <div class="card-name">${f.nazev || "(bez názvu)"}</div>
+            <div class="card-score">skóre ${f.skore}/100</div>
+          </div>
+          <div class="card-meta">IČO ${f.ico} · ${f.adresa || f.obec || ""} · obor: ${obory}</div>
+          <div class="card-duvody">${(f.duvody || []).join(" · ")}</div>
+          ${statusBarHtml(f.ico)}
+          ${odkazyNaFirmu(f.nazev, f.obec)}
+        `;
+      }
       wrap.appendChild(card);
     }
     resultsEl.appendChild(wrap);
   }
 }
+
+// delegace kliknutí na tlačítka stavů + sbalovací hlavičky + poznámku
+resultsEl.addEventListener("click", async (e) => {
+  const btn = e.target.closest(".status-btn");
+  if (btn) {
+    const ico = btn.dataset.ico;
+    const status = btn.dataset.status;
+    const poznamkaInput = resultsEl.querySelector(`.poznamka-input[data-ico="${ico}"]`);
+    const poznamka = poznamkaInput ? poznamkaInput.value : "";
+    await ulozStav(ico, status, poznamka);
+    vykresli();
+    return;
+  }
+  const toggleRow = e.target.closest(".card-collapsed-row");
+  if (toggleRow) {
+    const card = toggleRow.closest(".card");
+    card.classList.toggle("collapsed");
+  }
+});
+
+resultsEl.addEventListener("change", async (e) => {
+  if (e.target.classList.contains("poznamka-input")) {
+    const ico = e.target.dataset.ico;
+    const status = stavyMap[ico]?.status || null;
+    if (status) {
+      await ulozStav(ico, status, e.target.value);
+    }
+  }
+});
+
+toggleHidden.addEventListener("change", vykresli);
 
 async function hledej(pripojit = false) {
   const workerUrl = workerUrlInput.value.trim();
@@ -249,6 +417,9 @@ async function hledej(pripojit = false) {
     if (Object.keys(naceMap).length === 0) {
       naceMap = await zajistiNaceMapu(workerUrl);
     }
+    if (!pripojit && Object.keys(stavyMap).length === 0 && db) {
+      stavyMap = await nactiVsechnyStavy();
+    }
     const start = pripojit ? vsechnyFirmy.length : 0;
     const resp = await fetch(
       `${workerUrl.replace(/\/$/, "")}/search?obec=${encodeURIComponent(obec)}&pravniForma=112,121&start=${start}`
@@ -261,6 +432,7 @@ async function hledej(pripojit = false) {
 
     statusEl.textContent = `Nalezeno celkem ${pocetCelkem}, načteno ${vsechnyFirmy.length}.`;
     controlsRow.style.display = vsechnyFirmy.length ? "flex" : "none";
+    toggleHiddenRow.style.display = vsechnyFirmy.length ? "block" : "none";
     vykresli();
 
     if (vsechnyFirmy.length < pocetCelkem) {
