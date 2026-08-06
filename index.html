@@ -65,6 +65,15 @@
     border: 1px solid var(--accent); border-radius: 6px; padding: 3px 8px;
   }
   .empty { text-align: center; color: var(--muted); padding: 40px 0; }
+  .controls-row { display: flex; gap: 10px; align-items: center; margin: 10px 0 16px; flex-wrap: wrap; }
+  .controls-row select {
+    padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; background: white;
+  }
+  .load-more-btn {
+    display: block; margin: 20px auto; background: white; color: var(--accent);
+    border: 1px solid var(--accent);
+  }
+  .load-more-btn:disabled { opacity: 0.5; }
 </style>
 </head>
 <body>
@@ -93,7 +102,16 @@
   </div>
 
   <div id="status" class="status"></div>
+  <div id="controlsRow" class="controls-row" style="display:none;">
+    <label for="sortSelect">Řadit podle:</label>
+    <select id="sortSelect">
+      <option value="skore">Skóre (výchozí)</option>
+      <option value="vek">Stáří firmy (nejnovější první)</option>
+      <option value="nazev">Název (A–Z)</option>
+    </select>
+  </div>
   <div id="results"></div>
+  <button id="loadMoreBtn" class="load-more-btn" style="display:none;">Načíst dalších 50</button>
 </main>
 
 <script>
@@ -109,12 +127,42 @@ const obecInput = document.getElementById("obecInput");
 const statusEl = document.getElementById("status");
 const resultsEl = document.getElementById("results");
 const searchBtn = document.getElementById("searchBtn");
+const loadMoreBtn = document.getElementById("loadMoreBtn");
+const controlsRow = document.getElementById("controlsRow");
+const sortSelect = document.getElementById("sortSelect");
+
+// stav aktuálního hledání (pro stránkování a řazení)
+let vsechnyFirmy = [];
+let pocetCelkem = 0;
+let naceMap = {};
 
 // zapamatovat worker URL v prohlížeči (jen tento prohlížeč/zařízení)
 workerUrlInput.value = localStorage.getItem("mlf_worker_url") || "";
 workerUrlInput.addEventListener("change", () => {
   localStorage.setItem("mlf_worker_url", workerUrlInput.value.trim());
 });
+
+async function zajistiNaceMapu(workerUrl) {
+  // cache v localStorage na 7 dní, ať appka nemusí číselník tahat při každém hledání
+  const cacheKey = "mlf_nace_map";
+  const cacheTimeKey = "mlf_nace_map_time";
+  const cached = localStorage.getItem(cacheKey);
+  const cachedTime = parseInt(localStorage.getItem(cacheTimeKey) || "0", 10);
+  const tydenMs = 7 * 24 * 60 * 60 * 1000;
+  if (cached && Date.now() - cachedTime < tydenMs) {
+    return JSON.parse(cached);
+  }
+  const resp = await fetch(`${workerUrl.replace(/\/$/, "")}/nace-ciselnik`);
+  const data = await resp.json();
+  if (data.error) throw new Error(data.error);
+  localStorage.setItem(cacheKey, JSON.stringify(data.mapa));
+  localStorage.setItem(cacheTimeKey, String(Date.now()));
+  return data.mapa;
+}
+
+function nazevOboru(kod) {
+  return naceMap[kod] ? `${kod} – ${naceMap[kod]}` : kod;
+}
 
 function odkazyNaFirmu(nazev, obec) {
   const q = encodeURIComponent(`${nazev} ${obec}`);
@@ -126,27 +174,48 @@ function odkazyNaFirmu(nazev, obec) {
     </div>`;
 }
 
-function vykresli(firmy) {
+function serazeneFirmy() {
+  const zpusob = sortSelect.value;
+  const kopie = [...vsechnyFirmy];
+  if (zpusob === "vek") {
+    kopie.sort((a, b) => new Date(b.datumVzniku || 0) - new Date(a.datumVzniku || 0));
+  } else if (zpusob === "nazev") {
+    kopie.sort((a, b) => (a.nazev || "").localeCompare(b.nazev || "", "cs"));
+  } else {
+    kopie.sort((a, b) => b.skore - a.skore);
+  }
+  return kopie;
+}
+
+function vykresli() {
+  const firmy = serazeneFirmy();
   resultsEl.innerHTML = "";
   if (!firmy.length) {
     resultsEl.innerHTML = `<div class="empty">Žádné firmy nenalezeny — zkus jiný název obce.</div>`;
     return;
   }
-  for (const uroven of [1, 2, 3, 4]) {
-    const skupina = firmy.filter((f) => f.uroven === uroven);
+  // při řazení jiném než skóre nemá smysl dělit do úrovní vizuálně oddělenými skupinami
+  const podleUrovne = sortSelect.value === "skore";
+  const urovneKZobrazeni = podleUrovne ? [1, 2, 3, 4] : ["vse"];
+
+  for (const uroven of urovneKZobrazeni) {
+    const skupina = podleUrovne ? firmy.filter((f) => f.uroven === uroven) : firmy;
     if (!skupina.length) continue;
     const wrap = document.createElement("div");
     wrap.className = "level-group";
-    wrap.innerHTML = `<div class="level-title"><span class="dot" style="background:${LEVELS[uroven].color}"></span>${LEVELS[uroven].label} (${skupina.length})</div>`;
+    if (podleUrovne) {
+      wrap.innerHTML = `<div class="level-title"><span class="dot" style="background:${LEVELS[uroven].color}"></span>${LEVELS[uroven].label} (${skupina.length})</div>`;
+    }
     for (const f of skupina) {
       const card = document.createElement("div");
-      card.className = `card L${uroven}`;
+      card.className = `card L${f.uroven}`;
+      const obory = (f.czNace || []).map(nazevOboru).join(", ") || "neuvedeno";
       card.innerHTML = `
         <div class="card-top">
           <div class="card-name">${f.nazev || "(bez názvu)"}</div>
           <div class="card-score">skóre ${f.skore}/100</div>
         </div>
-        <div class="card-meta">IČO ${f.ico} · ${f.adresa || f.obec || ""} · obor: ${(f.czNace || []).join(", ") || "neuvedeno"}</div>
+        <div class="card-meta">IČO ${f.ico} · ${f.adresa || f.obec || ""} · obor: ${obory}</div>
         <div class="card-duvody">${(f.duvody || []).join(" · ")}</div>
         ${odkazyNaFirmu(f.nazev, f.obec)}
       `;
@@ -156,7 +225,7 @@ function vykresli(firmy) {
   }
 }
 
-async function hledej() {
+async function hledej(pripojit = false) {
   const workerUrl = workerUrlInput.value.trim();
   const obec = obecInput.value.trim();
   if (!workerUrl) {
@@ -166,24 +235,52 @@ async function hledej() {
   if (!obec) return;
 
   searchBtn.disabled = true;
-  statusEl.textContent = "Hledám v ARES...";
-  resultsEl.innerHTML = "";
+  loadMoreBtn.disabled = true;
+  statusEl.textContent = pripojit ? "Načítám další..." : "Hledám v ARES...";
+
+  if (!pripojit) {
+    vsechnyFirmy = [];
+    resultsEl.innerHTML = "";
+    controlsRow.style.display = "none";
+    loadMoreBtn.style.display = "none";
+  }
 
   try {
-    const resp = await fetch(`${workerUrl.replace(/\/$/, "")}/search?obec=${encodeURIComponent(obec)}&pravniForma=112,121`);
+    if (Object.keys(naceMap).length === 0) {
+      naceMap = await zajistiNaceMapu(workerUrl);
+    }
+    const start = pripojit ? vsechnyFirmy.length : 0;
+    const resp = await fetch(
+      `${workerUrl.replace(/\/$/, "")}/search?obec=${encodeURIComponent(obec)}&pravniForma=112,121&start=${start}`
+    );
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
-    statusEl.textContent = `Nalezeno celkem ${data.pocetCelkem}, zobrazeno ${data.vraceno}.`;
-    vykresli(data.firmy || []);
+
+    pocetCelkem = data.pocetCelkem;
+    vsechnyFirmy = pripojit ? vsechnyFirmy.concat(data.firmy || []) : (data.firmy || []);
+
+    statusEl.textContent = `Nalezeno celkem ${pocetCelkem}, načteno ${vsechnyFirmy.length}.`;
+    controlsRow.style.display = vsechnyFirmy.length ? "flex" : "none";
+    vykresli();
+
+    if (vsechnyFirmy.length < pocetCelkem) {
+      loadMoreBtn.style.display = "block";
+      loadMoreBtn.textContent = `Načíst dalších ${Math.min(50, pocetCelkem - vsechnyFirmy.length)}`;
+    } else {
+      loadMoreBtn.style.display = "none";
+    }
   } catch (e) {
     statusEl.textContent = `❌ Chyba: ${e.message}`;
   } finally {
     searchBtn.disabled = false;
+    loadMoreBtn.disabled = false;
   }
 }
 
-searchBtn.addEventListener("click", hledej);
-obecInput.addEventListener("keydown", (e) => { if (e.key === "Enter") hledej(); });
+searchBtn.addEventListener("click", () => hledej(false));
+loadMoreBtn.addEventListener("click", () => hledej(true));
+obecInput.addEventListener("keydown", (e) => { if (e.key === "Enter") hledej(false); });
+sortSelect.addEventListener("change", vykresli);
 </script>
 
 </body>

@@ -110,6 +110,27 @@ function skoreFirmy(subjekt) {
   return { skore, uroven, duvody };
 }
 
+async function nactiNaceCiselnik() {
+  const filtr = { kodCiselniku: "CzNace", pocet: 1000 };
+  const resp = await fetch(`${ARES_BASE}/ciselniky-nazevniky/vyhledat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(filtr),
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`ARES (ciselnik) vrátil ${resp.status}: ${text.slice(0, 300)}`);
+  }
+  const data = await resp.json();
+  const polozky = data.ciselniky?.[0]?.polozkyCiselniku || [];
+  const mapa = {};
+  for (const p of polozky) {
+    const nazevCs = p.nazev?.find((n) => n.kodJazyka === "cs") || p.nazev?.[0];
+    mapa[p.kod] = nazevCs?.nazev || p.kod;
+  }
+  return mapa;
+}
+
 async function hledejFirmy(kodObce, naceList, pravniFormaList, start = 0, pocet = 50) {
   const filtr = {
     sidlo: { kodObce },
@@ -143,6 +164,15 @@ export default {
     }
 
     const url = new URL(request.url);
+
+    if (url.pathname === "/nace-ciselnik") {
+      try {
+        const mapa = await nactiNaceCiselnik();
+        return jsonResponse({ mapa });
+      } catch (e) {
+        return jsonResponse({ error: String(e) }, 500);
+      }
+    }
 
     if (url.pathname === "/search") {
       const obec = url.searchParams.get("obec");
