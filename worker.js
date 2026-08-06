@@ -19,6 +19,21 @@
 
 const ARES_BASE = "https://ares.gov.cz/ekonomicke-subjekty-v-be/rest";
 
+/**
+ * Kódy obcí (RÚIAN/ČSÚ) — ověřeno ručně přes epusa.cz / risy.cz.
+ * "textovaAdresa" jako volný text hledá moc široce (Rychnov n. Kn.
+ * vrátilo 2462 výsledků napříč ČR), proto potřebujeme přesný kód.
+ * Doplňuj postupně, jak přibývají cílová města. Kód najdeš na
+ * epusa.cz (vyhledej obec -> pole "Kód obce") nebo risy.cz.
+ */
+const KODY_OBCI = {
+  "rychnov nad kněžnou": 576069,
+  // "dobruška": ???,
+  // "opočno": ???,
+  // "solnice": ???,
+  // ... doplnit před rozšířením na další obce
+};
+
 // CORS hlavičky — appka na GitHub Pages smí volat tenhle Worker odkudkoli
 function corsHeaders() {
   return {
@@ -95,9 +110,9 @@ function skoreFirmy(subjekt) {
   return { skore, uroven, duvody };
 }
 
-async function hledejFirmy(obec, naceList, start = 0, pocet = 50) {
+async function hledejFirmy(kodObce, naceList, start = 0, pocet = 50) {
   const filtr = {
-    sidlo: { textovaAdresa: obec },
+    sidlo: { kodObce },
     start,
     pocet,
   };
@@ -128,17 +143,29 @@ export default {
 
     if (url.pathname === "/search") {
       const obec = url.searchParams.get("obec");
+      const kodObceParam = url.searchParams.get("kodObce");
       const naceParam = url.searchParams.get("nace"); // čárkou oddělené kódy, volitelné
       const start = parseInt(url.searchParams.get("start") || "0", 10);
 
-      if (!obec) {
-        return jsonResponse({ error: "Chybí parametr ?obec=" }, 400);
+      let kodObce = kodObceParam ? parseInt(kodObceParam, 10) : null;
+      if (!kodObce && obec) {
+        kodObce = KODY_OBCI[obec.trim().toLowerCase()];
+      }
+      if (!kodObce) {
+        return jsonResponse(
+          {
+            error: obec
+              ? `Obec "${obec}" zatím není v tabulce KODY_OBCI. Zjisti kód obce (epusa.cz/risy.cz) a zavolej ?kodObce=CISLO, nebo ho přidej do worker.js.`
+              : "Chybí parametr ?obec= nebo ?kodObce=",
+          },
+          400
+        );
       }
 
       const naceList = naceParam ? naceParam.split(",").map((s) => s.trim()) : null;
 
       try {
-        const vysledek = await hledejFirmy(obec, naceList, start, 50);
+        const vysledek = await hledejFirmy(kodObce, naceList, start, 50);
         const subjekty = (vysledek.ekonomickeSubjekty || []).map((s) => {
           const { skore, uroven, duvody } = skoreFirmy(s);
           return {
