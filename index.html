@@ -87,6 +87,9 @@
       Adresa Worker proxy (vyplň jednou, appka si ji zapamatuje v prohlížeči):
       <input type="text" id="workerUrl" placeholder="https://tvuj-worker.tvuj-ucet.workers.dev" />
     </div>
+    <div class="worker-url-row" style="margin-top:6px;">
+      ⚠️ v1: zobrazeny jen s.r.o. a a.s. (kvůli limitu ARES 1000 výsledků). OSVČ zatím vynechány — přidáme po doladění filtru oboru.
+    </div>
   </div>
 
   <div id="status" class="status"></div>
@@ -167,7 +170,7 @@ async function hledej() {
   resultsEl.innerHTML = "";
 
   try {
-    const resp = await fetch(`${workerUrl.replace(/\/$/, "")}/search?obec=${encodeURIComponent(obec)}`);
+    const resp = await fetch(`${workerUrl.replace(/\/$/, "")}/search?obec=${encodeURIComponent(obec)}&pravniForma=112,121`);
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
     statusEl.textContent = `Nalezeno celkem ${data.pocetCelkem}, zobrazeno ${data.vraceno}.`;
