@@ -138,7 +138,7 @@
       <input type="text" id="workerUrl" placeholder="https://tvuj-worker.tvuj-ucet.workers.dev" />
     </div>
     <div class="worker-url-row" style="margin-top:6px;">
-      ⚠️ v1: zobrazeny jen s.r.o. a a.s. (kvůli limitu ARES 1000 výsledků). OSVČ zatím vynechány — přidáme po doladění filtru oboru.
+      ⚠️ v1.1: zobrazeny s.r.o., a.s., OSVČ a v.o.s./k.s. Obec, kterou appka ještě nezná, se teď zkusí dohledat automaticky — u nových obcí zkontroluj v nadpisu výsledků, že appka hledala tam, kde jsi čekal.
     </div>
   </div>
 
@@ -489,7 +489,7 @@ async function hledej(pripojit = false) {
     }
     const start = pripojit ? vsechnyFirmy.length : 0;
     const resp = await fetch(
-      `${workerUrl.replace(/\/$/, "")}/search?obec=${encodeURIComponent(obec)}&pravniForma=112,121&start=${start}`
+      `${workerUrl.replace(/\/$/, "")}/search?obec=${encodeURIComponent(obec)}&pravniForma=101,102,112,121,113&start=${start}`
     );
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
@@ -499,7 +499,8 @@ async function hledej(pripojit = false) {
     pridatDavku(data.firmy || [], !pripojit);
     if (!pripojit) localStorage.setItem("mlf_posledni_obec", obec);
 
-    statusEl.textContent = `Nalezeno celkem ${pocetCelkem}, načteno ${vsechnyFirmy.length}.`;
+    const obecInfo = data.obecPouzita ? ` (hledáno v: ${data.obecPouzita})` : "";
+    statusEl.textContent = `Nalezeno celkem ${pocetCelkem}, načteno ${vsechnyFirmy.length}.${obecInfo}`;
     controlsRow.style.display = vsechnyFirmy.length ? "flex" : "none";
     toggleHiddenRow.style.display = vsechnyFirmy.length ? "flex" : "none";
     vykresli();

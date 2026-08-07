@@ -131,6 +131,40 @@ async function nactiNaceCiselnik() {
   return mapa;
 }
 
+/**
+ * Dohledá kód obce (RÚIAN) podle názvu přes ARES standardizaci adres.
+ * STAV: NEOVĚŘENO ŽIVĚ — endpoint /standardizovane-adresy/vyhledat existuje
+ * v oficiálním ARES OpenAPI schématu a přijímá "komplexní filtr", ale
+ * přesný název pole pro volný text (předpoklad: "textovaAdresa", po vzoru
+ * ostatních filtrů v tomtéž API) jsem nemohl otestovat živě (bez síťového
+ * přístupu k ares.gov.cz z mého prostředí). PRVNÍ OSTRÉ POUŽITÍ OVĚŘ:
+ * zadej známou obec (např. "Rychnov nad Kněžnou") a zkontroluj, že vrácené
+ * kodObce sedí na hodnotu 576069 v tabulce KODY_OBCI níž.
+ * Pokud to nebude fungovat, appka se bezpečně vrátí k chybové hlášce
+ * (žádné tiché/špatné výsledky) — viz volání v /search níž.
+ */
+async function zjistiKodObce(nazevObce) {
+  try {
+    const resp = await fetch(`${ARES_BASE}/standardizovane-adresy/vyhledat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ textovaAdresa: nazevObce, pocet: 5 }),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const adresy = data.standardizovaneAdresy || [];
+    // Vezmi první výsledek, jehož název obce se shoduje (case-insensitive) se zadáním,
+    // ať nevybereme omylem nějakou ulici/část obce se stejným kódem, ale jiným místem.
+    const shoda =
+      adresy.find((a) => (a.nazevObce || "").trim().toLowerCase() === nazevObce.trim().toLowerCase()) ||
+      adresy[0];
+    if (!shoda || !shoda.kodObce) return null;
+    return { kodObce: shoda.kodObce, nazevObce: shoda.nazevObce || nazevObce };
+  } catch (e) {
+    return null;
+  }
+}
+
 async function hledejFirmy(kodObce, naceList, pravniFormaList, obchodniJmeno, start = 0, pocet = 50) {
   const filtr = {
     start,
@@ -187,14 +221,24 @@ export default {
       const obchodniJmeno = url.searchParams.get("jmeno"); // volitelné hledání podle (části) názvu firmy
 
       let kodObce = kodObceParam ? parseInt(kodObceParam, 10) : null;
+      let obecPouzita = null;
       if (!kodObce && obec) {
         kodObce = KODY_OBCI[obec.trim().toLowerCase()];
+        if (kodObce) obecPouzita = obec.trim();
+      }
+      if (!kodObce && obec) {
+        // Obec není v ruční tabulce (cache) -> zkus dohledat automaticky přes ARES/RÚIAN.
+        const nalezeno = await zjistiKodObce(obec.trim());
+        if (nalezeno) {
+          kodObce = nalezeno.kodObce;
+          obecPouzita = nalezeno.nazevObce;
+        }
       }
       if (!kodObce && !obchodniJmeno) {
         return jsonResponse(
           {
             error: obec
-              ? `Obec "${obec}" zatím není v tabulce KODY_OBCI. Zjisti kód obce (epusa.cz/risy.cz) a zavolej ?kodObce=CISLO, nebo hledej podle ?jmeno= bez obce.`
+              ? `Obec "${obec}" se nepodařilo dohledat (ani ručně v tabulce, ani automaticky přes ARES). Zkus zavolat ?kodObce=CISLO ručně (kód najdeš na epusa.cz/risy.cz), nebo hledej podle ?jmeno= bez obce.`
               : "Chybí parametr ?obec=, ?kodObce=, nebo ?jmeno=",
           },
           400
@@ -227,6 +271,8 @@ export default {
         return jsonResponse({
           pocetCelkem: vysledek.pocetCelkem,
           vraceno: subjekty.length,
+          obecPouzita,
+          kodObcePouzity: kodObce,
           firmy: subjekty,
         });
       } catch (e) {
