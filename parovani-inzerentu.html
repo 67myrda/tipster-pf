@@ -60,11 +60,15 @@ function parseCSV(text) {
   const radky = text.split(/\r?\n/).filter((r) => r.trim().length > 0);
   const hlavicka = radky[0].split(",");
   const idxFirma = hlavicka.findIndex((h) => h.trim().toLowerCase().includes("firma"));
+  const idxObec = hlavicka.findIndex((h) => h.trim().toLowerCase().includes("obec"));
+  const idxObor = hlavicka.findIndex((h) => h.trim().toLowerCase().includes("obor"));
   const out = [];
   for (let i = 1; i < radky.length; i++) {
     const cols = radky[i].split(",");
     const jmeno = (cols[idxFirma >= 0 ? idxFirma : 0] || "").trim();
-    if (jmeno) out.push({ jmeno, radekPuvodni: radky[i] });
+    const obecPuvodni = idxObec >= 0 ? (cols[idxObec] || "").trim() : "";
+    const oborPuvodni = idxObor >= 0 ? (cols[idxObor] || "").trim() : "";
+    if (jmeno) out.push({ jmeno, obecPuvodni, oborPuvodni });
   }
   return out;
 }
@@ -121,10 +125,10 @@ document.getElementById("startBtn").addEventListener("click", async () => {
     if (vysledek.chyba) {
       pocetChyb++;
       tr.innerHTML = `<td>${f.jmeno}</td><td class="err">chyba</td><td colspan="4">${vysledek.chyba}</td>`;
-      vysledky.push({ firma_csv: f.jmeno, nalezeno: "chyba", ico: "", pravniForma: "", datumVzniku: "", obec: "", poznamka: vysledek.chyba });
+      vysledky.push({ firma_csv: f.jmeno, obec_puvodni: f.obecPuvodni, obor_puvodni: f.oborPuvodni, nalezeno: "chyba", ico: "", pravniForma: "", datumVzniku: "", obec_ares: "", poznamka: vysledek.chyba });
     } else if (vysledek.firmy.length === 0) {
       tr.innerHTML = `<td>${f.jmeno}</td><td class="warn">nenalezeno</td><td colspan="4">—</td>`;
-      vysledky.push({ firma_csv: f.jmeno, nalezeno: "ne", ico: "", pravniForma: "", datumVzniku: "", obec: "", poznamka: "" });
+      vysledky.push({ firma_csv: f.jmeno, obec_puvodni: f.obecPuvodni, obor_puvodni: f.oborPuvodni, nalezeno: "ne", ico: "", pravniForma: "", datumVzniku: "", obec_ares: "", poznamka: "" });
     } else {
       pocetNalezeno++;
       // Bereme nejlépe skórovanou shodu (appka je uvnitř worker.js už seřazená podle skóre)
@@ -132,11 +136,13 @@ document.getElementById("startBtn").addEventListener("click", async () => {
       tr.innerHTML = `<td>${f.jmeno}</td><td class="ok">${vysledek.firmy.length}×</td><td>${nejlepsi.ico || ""}</td><td>${nejlepsi.pravniForma || ""}</td><td>${nejlepsi.datumVzniku || ""}</td><td>${nejlepsi.obec || ""}</td>`;
       vysledky.push({
         firma_csv: f.jmeno,
+        obec_puvodni: f.obecPuvodni,
+        obor_puvodni: f.oborPuvodni,
         nalezeno: "ano",
         ico: nejlepsi.ico || "",
         pravniForma: nejlepsi.pravniForma || "",
         datumVzniku: nejlepsi.datumVzniku || "",
-        obec: nejlepsi.obec || "",
+        obec_ares: nejlepsi.obec || "",
         pocet_shod: vysledek.firmy.length,
         poznamka: vysledek.firmy.length > 1 ? "VÍCE MOŽNÝCH SHOD — zkontroluj ručně" : "",
       });
@@ -160,7 +166,7 @@ document.getElementById("stopBtn").addEventListener("click", () => {
 });
 
 document.getElementById("downloadBtn").addEventListener("click", () => {
-  const hlavicka = ["firma_csv", "nalezeno", "ico", "pravniForma", "datumVzniku", "obec", "pocet_shod", "poznamka"];
+  const hlavicka = ["firma_csv", "obec_puvodni", "obor_puvodni", "nalezeno", "ico", "pravniForma", "datumVzniku", "obec_ares", "pocet_shod", "poznamka"];
   const radky = [hlavicka.join(",")];
   for (const v of vysledky) {
     radky.push(hlavicka.map((h) => `"${String(v[h] || "").replace(/"/g, '""')}"`).join(","));
