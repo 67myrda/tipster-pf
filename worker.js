@@ -131,12 +131,17 @@ async function nactiNaceCiselnik() {
   return mapa;
 }
 
-async function hledejFirmy(kodObce, naceList, pravniFormaList, start = 0, pocet = 50) {
+async function hledejFirmy(kodObce, naceList, pravniFormaList, obchodniJmeno, start = 0, pocet = 50) {
   const filtr = {
-    sidlo: { kodObce },
     start,
     pocet,
   };
+  if (kodObce) {
+    filtr.sidlo = { kodObce };
+  }
+  if (obchodniJmeno) {
+    filtr.obchodniJmeno = obchodniJmeno;
+  }
   if (pravniFormaList && pravniFormaList.length > 0) {
     filtr.pravniForma = pravniFormaList;
   }
@@ -179,17 +184,18 @@ export default {
       const kodObceParam = url.searchParams.get("kodObce");
       const naceParam = url.searchParams.get("nace"); // čárkou oddělené kódy, volitelné
       const start = parseInt(url.searchParams.get("start") || "0", 10);
+      const obchodniJmeno = url.searchParams.get("jmeno"); // volitelné hledání podle (části) názvu firmy
 
       let kodObce = kodObceParam ? parseInt(kodObceParam, 10) : null;
       if (!kodObce && obec) {
         kodObce = KODY_OBCI[obec.trim().toLowerCase()];
       }
-      if (!kodObce) {
+      if (!kodObce && !obchodniJmeno) {
         return jsonResponse(
           {
             error: obec
-              ? `Obec "${obec}" zatím není v tabulce KODY_OBCI. Zjisti kód obce (epusa.cz/risy.cz) a zavolej ?kodObce=CISLO, nebo ho přidej do worker.js.`
-              : "Chybí parametr ?obec= nebo ?kodObce=",
+              ? `Obec "${obec}" zatím není v tabulce KODY_OBCI. Zjisti kód obce (epusa.cz/risy.cz) a zavolej ?kodObce=CISLO, nebo hledej podle ?jmeno= bez obce.`
+              : "Chybí parametr ?obec=, ?kodObce=, nebo ?jmeno=",
           },
           400
         );
@@ -200,7 +206,7 @@ export default {
       const pravniFormaList = pfParam ? pfParam.split(",").map((s) => s.trim()) : null;
 
       try {
-        const vysledek = await hledejFirmy(kodObce, naceList, pravniFormaList, start, 50);
+        const vysledek = await hledejFirmy(kodObce, naceList, pravniFormaList, obchodniJmeno, start, 50);
         const subjekty = (vysledek.ekonomickeSubjekty || []).map((s) => {
           const { skore, uroven, duvody } = skoreFirmy(s);
           return {
