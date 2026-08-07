@@ -180,5 +180,52 @@ document.getElementById("downloadBtn").addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 </script>
+<div class="card" id="nace-card">
+  <h3 style="margin-top:0;">🔎 Hledání kódů CZ-NACE</h3>
+  <div>Stáhne aktuální číselník CZ-NACE přímo z ARES (přes worker) a necháš si vyhledat kódy podle klíčového slova (např. "kominictví", "reality", "autoservis").</div>
+  <button id="naceLoadBtn">Stáhnout číselník</button>
+  <input type="text" id="naceSearch" placeholder="Hledej klíčové slovo…" style="margin-top:8px;" />
+  <div id="naceStav" style="margin-top:8px; font-size:13px;"></div>
+  <table id="naceVysledky" style="display:none;">
+    <thead><tr><th>Kód</th><th>Název</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script>
+let naceMapa = null;
+
+document.getElementById("naceLoadBtn").addEventListener("click", async () => {
+  const workerUrl = document.getElementById("workerUrl").value.trim();
+  document.getElementById("naceStav").textContent = "Stahuji číselník…";
+  try {
+    const resp = await fetch(`${workerUrl.replace(/\/$/, "")}/nace-ciselnik`);
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    naceMapa = data.mapa || {};
+    document.getElementById("naceStav").textContent = `Staženo ${Object.keys(naceMapa).length} položek. Piš klíčové slovo výše.`;
+  } catch (e) {
+    document.getElementById("naceStav").textContent = `Chyba: ${e}`;
+  }
+});
+
+document.getElementById("naceSearch").addEventListener("input", (e) => {
+  if (!naceMapa) return;
+  const dotaz = e.target.value.trim().toLowerCase();
+  const tbody = document.querySelector("#naceVysledky tbody");
+  tbody.innerHTML = "";
+  if (dotaz.length < 2) {
+    document.getElementById("naceVysledky").style.display = "none";
+    return;
+  }
+  const shody = Object.entries(naceMapa).filter(([kod, nazev]) => nazev.toLowerCase().includes(dotaz));
+  document.getElementById("naceVysledky").style.display = shody.length ? "table" : "none";
+  for (const [kod, nazev] of shody.slice(0, 50)) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${kod}</td><td>${nazev}</td>`;
+    tbody.appendChild(tr);
+  }
+});
+</script>
 </body>
 </html>
