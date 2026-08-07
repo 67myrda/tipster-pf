@@ -144,25 +144,40 @@ async function nactiNaceCiselnik() {
  * (žádné tiché/špatné výsledky) — viz volání v /search níž.
  */
 async function zjistiKodObce(nazevObce) {
-  try {
-    const resp = await fetch(`${ARES_BASE}/standardizovane-adresy/vyhledat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ textovaAdresa: nazevObce, pocet: 5 }),
-    });
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    const adresy = data.standardizovaneAdresy || [];
-    // Vezmi první výsledek, jehož název obce se shoduje (case-insensitive) se zadáním,
-    // ať nevybereme omylem nějakou ulici/část obce se stejným kódem, ale jiným místem.
-    const shoda =
-      adresy.find((a) => (a.nazevObce || "").trim().toLowerCase() === nazevObce.trim().toLowerCase()) ||
-      adresy[0];
-    if (!shoda || !shoda.kodObce) return null;
-    return { kodObce: shoda.kodObce, nazevObce: shoda.nazevObce || nazevObce };
-  } catch (e) {
-    return null;
+  // Živý test (7.8.2026, "Solnice") ukázal, že první tvar dotazu ("textovaAdresa" na
+  // nejvyšší úrovni) nefungoval. Protože odsud nemám síťový přístup k ares.gov.cz
+  // a nemůžu to ověřit sám, zkouším postupně víc pravděpodobných tvarů těla dotazu.
+  // Až se ukáže, který (pokud vůbec nějaký) funguje, tenhle seznam zjednodušíme.
+  const pokusy = [
+    { textovaAdresa: nazevObce, pocet: 5 },
+    { adresa: { textovaAdresa: nazevObce }, pocet: 5 },
+    { obec: { nazevObce }, pocet: 5 },
+    { nazevObce, pocet: 5 },
+  ];
+  for (const telo of pokusy) {
+    try {
+      const resp = await fetch(`${ARES_BASE}/standardizovane-adresy/vyhledat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(telo),
+      });
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      const adresy = data.standardizovaneAdresy || [];
+      if (adresy.length === 0) continue;
+      // Vezmi první výsledek, jehož název obce se shoduje (case-insensitive) se zadáním,
+      // ať nevybereme omylem nějakou ulici/část obce se stejným kódem, ale jiným místem.
+      const shoda =
+        adresy.find((a) => (a.nazevObce || "").trim().toLowerCase() === nazevObce.trim().toLowerCase()) ||
+        adresy[0];
+      if (shoda && shoda.kodObce) {
+        return { kodObce: shoda.kodObce, nazevObce: shoda.nazevObce || nazevObce };
+      }
+    } catch (e) {
+      // zkus další tvar dotazu
+    }
   }
+  return null;
 }
 
 async function hledejFirmy(kodObce, naceList, pravniFormaList, obchodniJmeno, start = 0, pocet = 50) {
@@ -194,6 +209,39 @@ async function hledejFirmy(kodObce, naceList, pravniFormaList, obchodniJmeno, st
     throw new Error(`ARES vrátil ${resp.status}: ${text.slice(0, 300)}`);
   }
   return resp.json();
+}
+
+/**
+ * Živý test (7.8.2026, Rychnov n.Kn.) potvrdil: ARES odmítne CELÝ dotaz chybou
+ * "příliš mnoho výsledků", pokud filtr odpovídá >1000 záznamům — netýká se to
+ * jen stránkované části, ale úplně celého (nefiltrovaného stránkováním) součtu.
+ * Přidáním OSVČ do filtru se to stalo reálným problémem (1907 pro Rychnov n.Kn.).
+ * Řešení: rozděl právní formy do dvou skupin (OSVČ / firmy) a zavolej ARES 2x
+ * zvlášť, výsledky slij. Zmenší to pravděpodobnost přesažení stropu u většiny
+ * měst. ZNÁMÉ OMEZENÍ: u opravdu velkých měst (desetitisíce firem) může
+ * i jedna skupina sama o sobě strop překročit — pak dotaz stále selže a bude
+ * nutné přidat další úroveň dělení (např. podle NACE), zatím neřešeno.
+ * ZNÁMÉ OMEZENÍ 2: hluboké stránkování ("Načíst další") u rozděleného dotazu
+ * není 100% přesné (obě skupiny stránkují nezávisle na sobě), ale pro první
+ * várky nejlépe skórovaných firem to funguje spolehlivě.
+ */
+async function hledejFirmyRozdeleno(kodObce, naceList, pravniFormaList, obchodniJmeno, start, pocet) {
+  if (!pravniFormaList || pravniFormaList.length <= 1) {
+    return hledejFirmy(kodObce, naceList, pravniFormaList, obchodniJmeno, start, pocet);
+  }
+  const osvcFormy = pravniFormaList.filter((f) => ["101", "102"].includes(f));
+  const firemniFormy = pravniFormaList.filter((f) => !["101", "102"].includes(f));
+  const skupiny = [osvcFormy, firemniFormy].filter((s) => s.length > 0);
+  if (skupiny.length <= 1) {
+    return hledejFirmy(kodObce, naceList, pravniFormaList, obchodniJmeno, start, pocet);
+  }
+  const vysledky = await Promise.all(
+    skupiny.map((skupina) => hledejFirmy(kodObce, naceList, skupina, obchodniJmeno, start, pocet))
+  );
+  return {
+    pocetCelkem: vysledky.reduce((soucet, v) => soucet + (v.pocetCelkem || 0), 0),
+    ekonomickeSubjekty: vysledky.flatMap((v) => v.ekonomickeSubjekty || []),
+  };
 }
 
 export default {
@@ -250,7 +298,7 @@ export default {
       const pravniFormaList = pfParam ? pfParam.split(",").map((s) => s.trim()) : null;
 
       try {
-        const vysledek = await hledejFirmy(kodObce, naceList, pravniFormaList, obchodniJmeno, start, 50);
+        const vysledek = await hledejFirmyRozdeleno(kodObce, naceList, pravniFormaList, obchodniJmeno, start, 50);
         const subjekty = (vysledek.ekonomickeSubjekty || []).map((s) => {
           const { skore, uroven, duvody } = skoreFirmy(s);
           return {
