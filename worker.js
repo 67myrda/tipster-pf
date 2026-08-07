@@ -61,6 +61,51 @@ function jsonResponse(data, status = 200) {
  *  - pravni forma: drobné/lokální formy > velké korporátní formy
  * Výstup: 0-100, rozdělené do 4 úrovní.
  */
+/**
+ * Bodování podle oboru (CZ-NACE) — založeno na skutečné četnosti oborů ve vzorku
+ * 1298 inzerentů z plakátů (analýza 7.8.2026, viz předávací dokumentace).
+ * Kódy z valné většiny ŽIVĚ OVĚŘENY appkou přes /nace-ciselnik (podlahářství,
+ * truhlářství, nábytek, kámen, pohřební služby, pohonné hmoty) — zbytek (optika,
+ * elektro, komín, kov, klenoty, střechy, dřevo, reality) doplněn přes Perplexity
+ * a NEOVĚŘEN appkou naživo, ale shoda na těch ověřených kategoriích byla 100%,
+ * takže je beru jako důvěryhodné. PRVNÍ TESTOVACÍ NASAZENÍ — Myrda porovná
+ * výsledek se zkušeností z loňské edice Rychnova, váhy se podle toho doladí.
+ *
+ * Pořadí je důležité: specifičtější obory (podlahářství, truhlářství...) se
+ * testují DŘÍV než obecné "stavebnictví", aby do něj nespadly omylem.
+ */
+const NACE_KATEGORIE = [
+  { obor: "reality", vaha: 25, prefixy: ["68"] },
+  { obor: "pohostinství", vaha: 25, prefixy: ["561", "562", "563"] },
+  { obor: "autoškola", vaha: 20, prefixy: ["8553"] },
+  { obor: "autoservis", vaha: 20, prefixy: ["9531", "9532"] },
+  { obor: "podlahářství", vaha: 15, prefixy: ["4333", "1622", "4753"] },
+  { obor: "truhlářství/nábytek", vaha: 15, prefixy: ["1623", "4332", "3100"] },
+  { obor: "kamenictví", vaha: 15, prefixy: ["2370", "0811", "2369"] },
+  { obor: "kominictví", vaha: 15, prefixy: ["8122"] },
+  { obor: "střechy", vaha: 15, prefixy: ["4391", "4341"] },
+  { obor: "palivové dřevo", vaha: 15, prefixy: ["0220", "1610", "1621", "1629", "4673"] },
+  { obor: "kovovýroba", vaha: 15, prefixy: ["25", "2410", "2420", "2433", "2434"] },
+  { obor: "elektro", vaha: 15, prefixy: ["4321", "4754", "4643", "2711", "2712", "3314"] },
+  { obor: "optika", vaha: 15, prefixy: ["4774", "3250", "2670"] },
+  { obor: "pohřební služby", vaha: 15, prefixy: ["9630"] },
+  { obor: "klenotnictví", vaha: 10, prefixy: ["3212", "3213", "4777", "9525"] },
+  { obor: "stavebnictví (obecně)", vaha: 20, prefixy: ["41", "42", "43"] },
+];
+
+function obodujOborNace(czNaceList) {
+  if (!czNaceList || czNaceList.length === 0) return null;
+  for (const kat of NACE_KATEGORIE) {
+    for (const kodRaw of czNaceList) {
+      const kod = String(kodRaw);
+      if (kat.prefixy.some((p) => kod.startsWith(p))) {
+        return kat;
+      }
+    }
+  }
+  return null;
+}
+
 function skoreFirmy(subjekt) {
   let skore = 50; // základ
   const duvody = [];
@@ -97,6 +142,15 @@ function skoreFirmy(subjekt) {
     duvody.push("Právní forma odpovídá větší/korporátní struktuře (-10, OVĚŘIT kód formy)");
   } else {
     duvody.push(`Právní forma kód ${pf || "neznámý"} — nezařazeno do tabulky, neutrální`);
+  }
+
+  // --- obor (CZ-NACE) ---
+  const oborZasah = obodujOborNace(subjekt.czNace);
+  if (oborZasah) {
+    skore += oborZasah.vaha;
+    duvody.push(`Obor "${oborZasah.obor}" (CZ-NACE) — časté odvětví mezi kupujícími inzerce (+${oborZasah.vaha})`);
+  } else {
+    duvody.push("Obor mimo naši sledovanou top-kategorii — neutrální (0)");
   }
 
   skore = Math.max(0, Math.min(100, skore));
