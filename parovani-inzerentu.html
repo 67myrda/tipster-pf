@@ -186,7 +186,7 @@ document.getElementById("downloadBtn").addEventListener("click", () => {
   <button id="naceLoadBtn">Stáhnout číselník</button>
   <input type="text" id="naceSearch" placeholder="Hledej klíčové slovo…" style="margin-top:8px;" />
   <div id="naceStav" style="margin-top:8px; font-size:13px;"></div>
-  <table id="naceVysledky" style="display:none;">
+  <table id="naceVysledky">
     <thead><tr><th>Kód</th><th>Název</th></tr></thead>
     <tbody></tbody>
   </table>
@@ -203,29 +203,40 @@ document.getElementById("naceLoadBtn").addEventListener("click", async () => {
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
     naceMapa = data.mapa || {};
-    document.getElementById("naceStav").textContent = `Staženo ${Object.keys(naceMapa).length} položek. Piš klíčové slovo výše.`;
+    document.getElementById("naceStav").textContent = `Staženo ${Object.keys(naceMapa).length} položek. Piš klíčové slovo výše (aspoň 2 znaky).`;
   } catch (e) {
     document.getElementById("naceStav").textContent = `Chyba: ${e}`;
   }
 });
 
-document.getElementById("naceSearch").addEventListener("input", (e) => {
-  if (!naceMapa) return;
-  const dotaz = e.target.value.trim().toLowerCase();
+function hledejVNace() {
   const tbody = document.querySelector("#naceVysledky tbody");
   tbody.innerHTML = "";
-  if (dotaz.length < 2) {
-    document.getElementById("naceVysledky").style.display = "none";
+  if (!naceMapa) {
+    tbody.innerHTML = `<tr><td colspan="2">Nejdřív klikni "Stáhnout číselník".</td></tr>`;
     return;
   }
-  const shody = Object.entries(naceMapa).filter(([kod, nazev]) => nazev.toLowerCase().includes(dotaz));
-  document.getElementById("naceVysledky").style.display = shody.length ? "table" : "none";
-  for (const [kod, nazev] of shody.slice(0, 50)) {
+  const dotaz = document.getElementById("naceSearch").value.trim().toLowerCase();
+  if (dotaz.length < 2) {
+    tbody.innerHTML = `<tr><td colspan="2">Napiš aspoň 2 znaky.</td></tr>`;
+    return;
+  }
+  const shody = Object.entries(naceMapa).filter(([kod, nazev]) => String(nazev).toLowerCase().includes(dotaz));
+  if (shody.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="2">Nic nenalezeno pro "${dotaz}".</td></tr>`;
+    return;
+  }
+  for (const [kod, nazev] of shody.slice(0, 80)) {
     const tr = document.createElement("tr");
     tr.innerHTML = `<td>${kod}</td><td>${nazev}</td>`;
     tbody.appendChild(tr);
   }
-});
+}
+
+const naceInput = document.getElementById("naceSearch");
+naceInput.addEventListener("input", hledejVNace);
+naceInput.addEventListener("keyup", hledejVNace);
+naceInput.addEventListener("change", hledejVNace);
 </script>
 </body>
 </html>
