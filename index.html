@@ -155,9 +155,12 @@
   .status-btn.active-K { background: #7a9b6e; color: white; border-color: #7a9b6e; }
   .status-btn.active-P { background: #d3a24a; color: white; border-color: #d3a24a; }
   .status-btn.active-O { background: #e0c468; color: #40382f; border-color: #e0c468; }
+  .status-btn.active-E { background: #8aa9c9; color: white; border-color: #8aa9c9; }
+  .status-btn.active-T { background: #b79ac9; color: white; border-color: #b79ac9; }
   .status-btn.active-N { background: #b0685f; color: white; border-color: #b0685f; }
   .status-btn.active-X { background: #b3a99a; color: white; border-color: #b3a99a; }
   .status-btn.active-Z { background: #8593a0; color: white; border-color: #8593a0; }
+  .status-btn.active-V { background: #8a6f5c; color: white; border-color: #8a6f5c; }
   .poznamka-input {
     width: 100%; margin-top: 6px; padding: 7px 9px; border: 1px solid var(--border-soft);
     border-radius: 8px; font-size: 13px;
@@ -273,10 +276,13 @@ const STATUS_KOLEKCE = "mlf_firmy_status";
 const STAVY = {
   K: { label: "Koupili", color: "#7a9b6e" },
   P: { label: "Zájem, jedná se", color: "#d3a24a" },
-  O: { label: "Osloveno, čeká se", color: "#e0c468" },
+  O: { label: "Follow-up!", color: "#e0c468" },
+  E: { label: "Poslat e-mail", color: "#8aa9c9" },
+  T: { label: "Jen na telefon", color: "#b79ac9" },
   N: { label: "Odmítli", color: "#b0685f" },
   Z: { label: "Nemá koncového zákazníka v místě", color: "#8593a0" },
   X: { label: "Nezastiženo", color: "#b3a99a" },
+  V: { label: "Nevhodné", color: "#8a6f5c" },
 };
 
 // Skupiny právní formy pro filtr — kódy odpovídají tomu, co appka posílá ARESu.
@@ -359,7 +365,7 @@ async function zajistiNaceMapu(workerUrl) {
 }
 
 function nazevOboru(kod) {
-  return naceMap[kod] ? `${kod} – ${naceMap[kod]}` : kod;
+  return naceMap[kod] || kod;
 }
 
 function odkazyNaFirmu(nazev, obec) {
@@ -580,10 +586,12 @@ resultsEl.addEventListener("click", async (e) => {
   const btn = e.target.closest(".status-btn");
   if (btn) {
     const ico = btn.dataset.ico;
-    const status = btn.dataset.status;
+    const klikStatus = btn.dataset.status;
+    const aktualniStatus = stavyMap[ico]?.status || null;
+    const novyStatus = aktualniStatus === klikStatus ? null : klikStatus; // druhy klik na stejny stav = zrusit
     const poznamkaInput = resultsEl.querySelector(`.poznamka-input[data-ico="${ico}"]`);
     const poznamka = poznamkaInput ? poznamkaInput.value : "";
-    await ulozStav(ico, status, poznamka);
+    await ulozStav(ico, novyStatus, poznamka);
     vykresli();
     return;
   }
