@@ -6,9 +6,11 @@
 <title>MLF — Marketing Lead Finder | Pro-Factor</title>
 <style>
   :root {
-    --l1: #16a34a; --l2: #65a30d; --l3: #d97706; --l4: #9ca3af;
-    --bg: #f8f7f5; --card: #ffffff; --ink: #1f2937; --muted: #6b7280;
-    --accent: #c2410c;
+    --l1: #6f9b6a; --l2: #a3ac5e; --l3: #d3a24a; --l4: #b3a99a;
+    --bg: #f6f1e9; --card: #fffdfa; --ink: #40382f; --muted: #948a7c;
+    --accent: #c66a45; --accent-soft: #eddccf;
+    --header-bg: #3d4d47; --header-ink: #f3ede2;
+    --border-soft: #e8ded0;
   }
   * { box-sizing: border-box; }
   body {
@@ -16,34 +18,64 @@
     background: var(--bg); color: var(--ink);
   }
   header {
-    background: #1f2937; color: white; padding: 16px 20px;
+    background: var(--header-bg); color: var(--header-ink); padding: 18px 20px;
     display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+    border-bottom: 3px solid var(--accent);
   }
-  header h1 { font-size: 18px; margin: 0; }
-  header .sub { color: #9ca3af; font-size: 13px; }
+  header h1 { font-size: 19px; margin: 0; font-weight: 700; letter-spacing: 0.2px; }
+  header .sub { color: #cfd8d1; font-size: 13px; }
   main { max-width: 900px; margin: 0 auto; padding: 20px 16px 80px; }
   .search-box {
-    background: var(--card); border-radius: 12px; padding: 16px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 20px;
+    background: var(--card); border-radius: 16px; padding: 18px;
+    box-shadow: 0 2px 10px rgba(90, 70, 50, 0.08); margin-bottom: 20px;
+    border: 1px solid var(--border-soft);
   }
+  .field-label { font-size: 12px; color: var(--muted); font-weight: 600; margin: 0 0 4px 2px; text-transform: uppercase; letter-spacing: 0.4px; }
   .search-row { display: flex; gap: 8px; flex-wrap: wrap; }
   input[type=text] {
-    flex: 1; min-width: 180px; padding: 10px 12px; border: 1px solid #d1d5db;
-    border-radius: 8px; font-size: 15px;
+    flex: 1; min-width: 180px; padding: 11px 13px; border: 1px solid var(--border-soft);
+    border-radius: 10px; font-size: 15px; background: #fffefc; color: var(--ink);
   }
+  input[type=text]:focus { outline: none; border-color: var(--accent); }
   button {
-    background: var(--accent); color: white; border: none; border-radius: 8px;
-    padding: 10px 18px; font-size: 15px; cursor: pointer;
+    background: var(--accent); color: white; border: none; border-radius: 10px;
+    padding: 11px 20px; font-size: 15px; cursor: pointer; font-weight: 600;
+    transition: opacity 0.15s;
   }
-  button:disabled { background: #d1d5db; cursor: default; }
-  .worker-url-row { margin-top: 10px; font-size: 13px; color: var(--muted); }
-  .worker-url-row input { width: 100%; margin-top: 4px; font-size: 13px; padding: 6px 8px; }
+  button:hover { opacity: 0.9; }
+  button:disabled { background: #ddd4c6; cursor: default; }
+  .worker-url-row { margin-top: 12px; font-size: 13px; color: var(--muted); }
+  .worker-url-row input { width: 100%; margin-top: 4px; font-size: 13px; padding: 7px 9px; }
+  .hint-box {
+    margin-top: 10px; font-size: 12.5px; color: var(--muted); background: var(--accent-soft);
+    border-radius: 10px; padding: 8px 12px; line-height: 1.5;
+  }
+
+  /* Filtr právní formy — pastelové "pilulky", tlumené když vypnuté */
+  .form-filter-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; align-items: center; }
+  .form-pill {
+    background: var(--pill-color, #eee); color: #5a4f3f; border: 2px solid transparent;
+    border-radius: 999px; padding: 8px 18px; font-size: 14px; font-weight: 600;
+    opacity: 0.42; cursor: pointer; transition: all 0.15s;
+  }
+  .form-pill.active { opacity: 1; border-color: rgba(0,0,0,0.12); box-shadow: 0 2px 5px rgba(90,70,50,0.12); }
+
+  /* Status chips — sčítání a filtrování podle stavu jednání */
+  .status-chips-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 16px; }
+  .status-chip {
+    background: var(--chip-color, #eee); color: #40382f; border: 2px solid transparent;
+    border-radius: 999px; padding: 6px 13px; font-size: 12.5px; font-weight: 600;
+    opacity: 0.5; cursor: pointer;
+  }
+  .status-chip.active { opacity: 1; border-color: rgba(0,0,0,0.15); }
+  .status-chip.all-chip { background: #e9e2d6; }
+
   .stat-tiles {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
     gap: 8px; margin-top: 14px;
   }
   .stat-tile {
-    background: #faf9f7; border: 1px solid #eee6dd; border-radius: 10px;
+    background: #faf6ef; border: 1px solid var(--border-soft); border-radius: 12px;
     padding: 10px 8px; text-align: center;
   }
   .stat-tile .num { font-size: 22px; font-weight: 700; line-height: 1.1; }
@@ -51,33 +83,37 @@
   .status { margin: 12px 0; color: var(--muted); font-size: 14px; }
   .level-group { margin-bottom: 24px; }
   .level-title {
-    font-weight: 700; font-size: 15px; margin: 0 0 8px 4px;
+    font-weight: 700; font-size: 14.5px; margin: 0 0 8px 4px; color: var(--ink);
     display: flex; align-items: center; gap: 8px;
   }
   .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
   .card {
-    background: var(--card); border-radius: 10px; padding: 12px 14px;
-    margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.06);
-    border-left: 4px solid transparent;
+    background: var(--card); border-radius: 14px; padding: 13px 15px;
+    margin-bottom: 9px; box-shadow: 0 1px 4px rgba(90,70,50,0.07);
+    border-left: 5px solid transparent; border: 1px solid var(--border-soft); border-left-width: 5px;
   }
   .card.L1 { border-left-color: var(--l1); }
   .card.L2 { border-left-color: var(--l2); }
   .card.L3 { border-left-color: var(--l3); }
   .card.L4 { border-left-color: var(--l4); }
-  .card-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-  .card-name { font-weight: 600; font-size: 15px; }
+  .card-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .card-name { font-weight: 700; font-size: 15px; }
+  .score-badge {
+    width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    color: white; font-size: 12px; font-weight: 700; flex-shrink: 0; line-height: 1.1;
+  }
   .card-score { font-size: 13px; color: var(--muted); white-space: nowrap; }
-  .card-meta { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .card-meta { font-size: 13px; color: var(--muted); margin-top: 5px; }
   .card-duvody { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
-  .card-links { margin-top: 8px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .card-links { margin-top: 9px; display: flex; gap: 8px; flex-wrap: wrap; }
   .card-links a {
     font-size: 12px; color: var(--accent); text-decoration: none;
-    border: 1px solid var(--accent); border-radius: 6px; padding: 3px 8px;
+    border: 1px solid var(--accent); border-radius: 999px; padding: 3px 10px;
   }
   .empty { text-align: center; color: var(--muted); padding: 40px 0; }
   .controls-row { display: flex; gap: 10px; align-items: center; margin: 10px 0 16px; flex-wrap: wrap; }
   .controls-row select {
-    padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; background: white;
+    padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: 10px; font-size: 14px; background: white;
   }
   .load-more-btn {
     display: block; margin: 20px auto; background: white; color: var(--accent);
@@ -86,39 +122,39 @@
   .load-more-btn:disabled { opacity: 0.5; }
   .filter-tabs { display: flex; gap: 6px; margin: 10px 0 16px; }
   .filter-tab {
-    padding: 8px 16px; border-radius: 8px; border: 1px solid #d1d5db;
-    background: white; color: var(--ink); font-size: 14px; cursor: pointer;
+    padding: 8px 18px; border-radius: 999px; border: 1px solid var(--border-soft);
+    background: white; color: var(--ink); font-size: 14px; cursor: pointer; font-weight: 600;
   }
-  .filter-tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .filter-tab.active { background: var(--header-bg); color: white; border-color: var(--header-bg); }
   .status-bar {
     display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; align-items: center;
   }
   .status-btn {
-    font-size: 12px; padding: 5px 10px; border-radius: 6px; border: 1px solid #d1d5db;
+    font-size: 12px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--border-soft);
     background: white; cursor: pointer; color: var(--ink);
   }
-  .status-btn.active-K { background: #16a34a; color: white; border-color: #16a34a; }
-  .status-btn.active-P { background: #d97706; color: white; border-color: #d97706; }
-  .status-btn.active-O { background: #eab308; color: white; border-color: #eab308; }
-  .status-btn.active-N { background: #dc2626; color: white; border-color: #dc2626; }
-  .status-btn.active-X { background: #9ca3af; color: white; border-color: #9ca3af; }
-  .status-btn.active-Z { background: #64748b; color: white; border-color: #64748b; }
+  .status-btn.active-K { background: #7a9b6e; color: white; border-color: #7a9b6e; }
+  .status-btn.active-P { background: #d3a24a; color: white; border-color: #d3a24a; }
+  .status-btn.active-O { background: #e0c468; color: #40382f; border-color: #e0c468; }
+  .status-btn.active-N { background: #b0685f; color: white; border-color: #b0685f; }
+  .status-btn.active-X { background: #b3a99a; color: white; border-color: #b3a99a; }
+  .status-btn.active-Z { background: #8593a0; color: white; border-color: #8593a0; }
   .poznamka-input {
-    width: 100%; margin-top: 6px; padding: 6px 8px; border: 1px solid #d1d5db;
-    border-radius: 6px; font-size: 13px;
+    width: 100%; margin-top: 6px; padding: 7px 9px; border: 1px solid var(--border-soft);
+    border-radius: 8px; font-size: 13px;
   }
-  .card.collapsed { padding: 8px 14px; }
+  .card.collapsed { padding: 9px 15px; }
   .card.collapsed .card-body { display: none; }
   .card-collapsed-row {
     display: flex; justify-content: space-between; align-items: center; cursor: pointer;
   }
   .status-badge {
-    font-size: 11px; padding: 2px 8px; border-radius: 10px; color: white; white-space: nowrap;
+    font-size: 11px; padding: 3px 10px; border-radius: 999px; color: white; white-space: nowrap; font-weight: 600;
   }
   .toggle-hidden-row { margin: 8px 0 16px; font-size: 13px; }
   .toggle-hidden-row label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
   .firebase-warning {
-    background: #fef3c7; border: 1px solid #d97706; border-radius: 8px; padding: 10px 14px;
+    background: #f5e6c8; border: 1px solid #d3a24a; border-radius: 10px; padding: 10px 14px;
     font-size: 13px; margin-bottom: 16px; display: none;
   }
 </style>
@@ -131,29 +167,38 @@
 
 <header>
   <div>
-    <h1>🔎 MLF — Marketing Lead Finder</h1>
+    <h1>🔎 Tipster app</h1>
     <div class="sub">Pro-Factor · filtr potenciálních zájemců o inzerci</div>
   </div>
-  <div class="sub">v1 · Rychnovsko pilot</div>
+  <div class="sub">v1.3 · Rychnovsko pilot</div>
 </header>
 
 <main>
   <div class="search-box">
+    <div class="field-label">Město / obec</div>
     <div class="search-row">
       <input type="text" id="obecInput" placeholder="Obec (např. Rychnov nad Kněžnou)" value="Rychnov nad Kněžnou" />
       <button id="searchBtn">Hledat</button>
     </div>
+
+    <div class="form-filter-row">
+      <button class="form-pill active" data-forma="osvc" style="--pill-color:#eccd82;">OSVČ</button>
+      <button class="form-pill active" data-forma="sro" style="--pill-color:#dde3a6;">s. r. o.</button>
+      <button class="form-pill active" data-forma="as" style="--pill-color:#eeb098;">a. s.</button>
+    </div>
+
     <div class="worker-url-row">
       Adresa Worker proxy (vyplň jednou, appka si ji zapamatuje v prohlížeči):
       <input type="text" id="workerUrl" placeholder="https://tvuj-worker.tvuj-ucet.workers.dev" />
     </div>
-    <div class="worker-url-row" style="margin-top:6px;">
-      ⚠️ v1.2: appka defaultně hledá jen v ~15 sledovaných oborech (viz níže), aby se vešla pod limit ARES. Zobrazeny s.r.o., a.s., OSVČ a v.o.s./k.s. Nová obec — zkontroluj v nadpisu výsledků, kde appka reálně hledala.
+    <div class="hint-box">
+      v1.3: hledá jen ve sledovaných oborech (viz níže), aby se vešla pod limit ARES. Nová obec — zkontroluj v hlášce pod tlačítkem Hledat, kde appka reálně hledala.
     </div>
     <div id="statTiles" class="stat-tiles" style="display:none;"></div>
   </div>
 
   <div id="status" class="status"></div>
+  <div id="statusChipsRow" class="status-chips-row" style="display:none;"></div>
   <div id="controlsRow" class="controls-row" style="display:none;">
     <label for="sortSelect">Řadit podle:</label>
     <select id="sortSelect">
@@ -204,13 +249,21 @@ if (FIREBASE_HOTOVO) {
 const STATUS_KOLEKCE = "mlf_firmy_status";
 
 const STAVY = {
-  K: { label: "Koupili", color: "#16a34a" },
-  P: { label: "Zájem, jedná se", color: "#d97706" },
-  O: { label: "Osloveno, čeká se", color: "#eab308" },
-  N: { label: "Odmítli", color: "#dc2626" },
-  Z: { label: "Nemá koncového zákazníka v místě", color: "#64748b" },
-  X: { label: "Nezastiženo", color: "#9ca3af" },
+  K: { label: "Koupili", color: "#7a9b6e" },
+  P: { label: "Zájem, jedná se", color: "#d3a24a" },
+  O: { label: "Osloveno, čeká se", color: "#e0c468" },
+  N: { label: "Odmítli", color: "#b0685f" },
+  Z: { label: "Nemá koncového zákazníka v místě", color: "#8593a0" },
+  X: { label: "Nezastiženo", color: "#b3a99a" },
 };
+
+// Skupiny právní formy pro filtr — kódy odpovídají tomu, co appka posílá ARESu.
+const FORMY = {
+  osvc: { label: "OSVČ", kody: ["101", "102"] },
+  sro: { label: "s. r. o.", kody: ["112", "113"] },
+  as: { label: "a. s.", kody: ["121"] },
+};
+let aktivniFormy = new Set(["osvc", "sro", "as"]); // výchozí: všechny zapnuté
 
 // lokální cache stavů: { ico: { status, poznamka, autor, datum } }
 let stavyMap = {};
@@ -234,10 +287,10 @@ async function ulozStav(ico, status, poznamka) {
 }
 
 const LEVELS = {
-  1: { label: "Úroveň 1 — nejvhodnější, navštívit první", color: "var(--l1)" },
-  2: { label: "Úroveň 2 — dobří kandidáti", color: "var(--l2)" },
-  3: { label: "Úroveň 3 — možní, nižší priorita", color: "var(--l3)" },
-  4: { label: "Úroveň 4 — nevhodné, ale nemazáno", color: "var(--l4)" },
+  1: { label: "Úroveň 1 — nejvhodnější, navštívit první", color: "#6f9b6a" },
+  2: { label: "Úroveň 2 — dobří kandidáti", color: "#a3ac5e" },
+  3: { label: "Úroveň 3 — možní, nižší priorita", color: "#d3a24a" },
+  4: { label: "Úroveň 4 — nevhodné, ale nemazáno", color: "#b3a99a" },
 };
 
 const workerUrlInput = document.getElementById("workerUrl");
@@ -249,7 +302,9 @@ const loadMoreBtn = document.getElementById("loadMoreBtn");
 const controlsRow = document.getElementById("controlsRow");
 const sortSelect = document.getElementById("sortSelect");
 const toggleHiddenRow = document.getElementById("toggleHiddenRow");
+const statusChipsRow = document.getElementById("statusChipsRow");
 let aktivniFiltr = "aktivni"; // aktivni | vyrizene | vse
+let aktivniStatusFiltr = null; // null = bez filtru, jinak kód ze STAVY (K/P/O/N/Z/X)
 
 // stav aktuálního hledání (pro stránkování a řazení)
 let vsechnyFirmy = [];
@@ -374,9 +429,35 @@ function vykresliStatTiles(firmy) {
   tilesEl.style.display = "grid";
 }
 
+function vykresliStatusChips() {
+  if (!vsechnyFirmy.length) {
+    statusChipsRow.style.display = "none";
+    return;
+  }
+  const pocty = {};
+  for (const kod of Object.keys(STAVY)) pocty[kod] = 0;
+  for (const f of vsechnyFirmy) {
+    const s = stavyMap[f.ico]?.status;
+    if (s && pocty[s] !== undefined) pocty[s]++;
+  }
+  const vseChip = `<button class="status-chip all-chip ${aktivniStatusFiltr === null ? "active" : ""}" data-status="">Vše (${vsechnyFirmy.length})</button>`;
+  const chips = Object.entries(STAVY)
+    .map(([kod, info]) => {
+      const aktivni = aktivniStatusFiltr === kod ? "active" : "";
+      return `<button class="status-chip ${aktivni}" data-status="${kod}" style="--chip-color:${info.color}">${info.label} (${pocty[kod]})</button>`;
+    })
+    .join("");
+  statusChipsRow.innerHTML = vseChip + chips;
+  statusChipsRow.style.display = "flex";
+}
+
 function vykresli() {
   vykresliStatTiles(vsechnyFirmy);
+  vykresliStatusChips();
   let firmy = serazeneFirmy();
+  if (aktivniStatusFiltr) {
+    firmy = firmy.filter((f) => stavyMap[f.ico]?.status === aktivniStatusFiltr);
+  }
   resultsEl.innerHTML = "";
   if (!firmy.length) {
     resultsEl.innerHTML = `<div class="empty">Žádné firmy nenalezeny — zkus jiný název obce.</div>`;
@@ -418,6 +499,14 @@ function vykresli() {
   }
 }
 
+function skoreBarva(uroven) {
+  return LEVELS[uroven]?.color || "#b3a99a";
+}
+
+function scoreBadgeHtml(f) {
+  return `<div class="score-badge" style="background:${skoreBarva(f.uroven)}">${f.skore}<br>/100</div>`;
+}
+
 function vykresliKartu(f, wrap, vzdyRozbaleno) {
   const stavZaznam = stavyMap[f.ico];
   const jeSbaleno = !!stavZaznam?.status && !vzdyRozbaleno;
@@ -431,7 +520,10 @@ function vykresliKartu(f, wrap, vzdyRozbaleno) {
     card.innerHTML = `
       <div class="card-collapsed-row" data-toggle="${f.ico}">
         <div class="card-name">${f.nazev || "(bez názvu)"}</div>
-        <span class="status-badge" style="background:${info.color}">${info.label}</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="status-badge" style="background:${info.color}">${info.label}</span>
+          ${scoreBadgeHtml(f)}
+        </div>
       </div>
       <div class="card-body">
         <div class="card-meta">IČO ${f.ico} · ${f.adresa || f.obec || ""} · obor: ${obory}</div>
@@ -442,11 +534,14 @@ function vykresliKartu(f, wrap, vzdyRozbaleno) {
   } else {
     const stavBadge = stavZaznam?.status
       ? `<span class="status-badge" style="background:${STAVY[stavZaznam.status].color}">${STAVY[stavZaznam.status].label}</span>`
-      : `<div class="card-score">skóre ${f.skore}/100</div>`;
+      : "";
     card.innerHTML = `
       <div class="card-top">
         <div class="card-name">${f.nazev || "(bez názvu)"}</div>
-        ${stavBadge}
+        <div style="display:flex; align-items:center; gap:8px;">
+          ${stavBadge}
+          ${scoreBadgeHtml(f)}
+        </div>
       </div>
       <div class="card-meta">IČO ${f.ico} · ${f.adresa || f.obec || ""} · obor: ${obory}</div>
       <div class="card-duvody">${(f.duvody || []).join(" · ")}</div>
@@ -484,6 +579,28 @@ resultsEl.addEventListener("change", async (e) => {
       await ulozStav(ico, status, e.target.value);
     }
   }
+});
+
+document.querySelectorAll(".form-pill").forEach((pill) => {
+  pill.addEventListener("click", () => {
+    const forma = pill.dataset.forma;
+    if (aktivniFormy.has(forma)) {
+      if (aktivniFormy.size === 1) return; // aspoň jedna forma musí zůstat zapnutá
+      aktivniFormy.delete(forma);
+      pill.classList.remove("active");
+    } else {
+      aktivniFormy.add(forma);
+      pill.classList.add("active");
+    }
+    if (vsechnyFirmy.length || statusEl.textContent) hledej(false);
+  });
+});
+
+statusChipsRow.addEventListener("click", (e) => {
+  const chip = e.target.closest(".status-chip");
+  if (!chip) return;
+  aktivniStatusFiltr = chip.dataset.status || null;
+  vykresli();
 });
 
 toggleHiddenRow.addEventListener("click", (e) => {
@@ -527,8 +644,9 @@ async function hledej(pripojit = false) {
       stavyMap = await nactiVsechnyStavy();
     }
     const start = pripojit ? vsechnyFirmy.length : 0;
+    const pravniFormaParam = [...aktivniFormy].flatMap((k) => FORMY[k].kody).join(",");
     const resp = await fetch(
-      `${workerUrl.replace(/\/$/, "")}/search?obec=${encodeURIComponent(obec)}&pravniForma=101,102,112,121,113&start=${start}`
+      `${workerUrl.replace(/\/$/, "")}/search?obec=${encodeURIComponent(obec)}&pravniForma=${pravniFormaParam}&start=${start}`
     );
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
