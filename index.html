@@ -81,6 +81,12 @@
   .stat-tile .num { font-size: 22px; font-weight: 700; line-height: 1.1; }
   .stat-tile .lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
   .status { margin: 12px 0; color: var(--muted); font-size: 14px; }
+  .hledac-row { margin: 4px 0 10px; }
+  .hledac-row input {
+    width: 100%; padding: 10px 13px; border: 1px solid var(--border-soft);
+    border-radius: 10px; font-size: 14px; background: #fffefc; color: var(--ink);
+  }
+  .hledac-row input:focus { outline: none; border-color: var(--accent); }
   .level-group { margin-bottom: 24px; }
   .level-title {
     font-weight: 700; font-size: 14.5px; margin: 0 0 8px 4px; color: var(--ink);
@@ -223,6 +229,9 @@
   </div>
 
   <div id="status" class="status"></div>
+  <div id="hledacRow" class="hledac-row" style="display:none;">
+    <input type="text" id="hledacInput" placeholder="🔍 Hledat v načtených výsledcích (ulice, jméno, obor)…" />
+  </div>
   <div id="statusChipsRow" class="status-chips-row" style="display:none;"></div>
   <div id="controlsRow" class="controls-row" style="display:none;">
     <div id="toggleHiddenRow" class="filter-tabs">
@@ -334,6 +343,9 @@ let aktivniRazeni = "skore"; // skore | vek | nazev
 const statusChipsRow = document.getElementById("statusChipsRow");
 let aktivniFiltr = "aktivni"; // aktivni | vyrizene | vse
 let aktivniStatusFiltr = null; // null = bez filtru, jinak kód ze STAVY (K/P/O/N/Z/X)
+const hledacRow = document.getElementById("hledacRow");
+const hledacInput = document.getElementById("hledacInput");
+let hledacText = ""; // filtr napříč jménem/adresou/oborem v už načtených výsledcích
 
 // stav aktuálního hledání (pro stránkování a řazení)
 let vsechnyFirmy = [];
@@ -480,12 +492,22 @@ function vykresliStatusChips() {
   statusChipsRow.style.display = "flex";
 }
 
+function odpovidaHledaci(f) {
+  if (!hledacText) return true;
+  const obory = (f.czNace || []).map(nazevOboru).join(" ");
+  const text = `${f.nazev || ""} ${f.adresa || ""} ${f.obec || ""} ${obory}`.toLowerCase();
+  return text.includes(hledacText.toLowerCase());
+}
+
 function vykresli() {
   vykresliStatTiles(vsechnyFirmy);
   vykresliStatusChips();
   let firmy = serazeneFirmy();
   if (aktivniStatusFiltr) {
     firmy = firmy.filter((f) => stavyMap[f.ico]?.status === aktivniStatusFiltr);
+  }
+  if (hledacText) {
+    firmy = firmy.filter(odpovidaHledaci);
   }
   resultsEl.innerHTML = "";
   if (!firmy.length) {
@@ -627,6 +649,11 @@ document.querySelectorAll(".form-pill").forEach((pill) => {
   });
 });
 
+hledacInput.addEventListener("input", () => {
+  hledacText = hledacInput.value.trim();
+  vykresli();
+});
+
 statusChipsRow.addEventListener("click", (e) => {
   const chip = e.target.closest(".status-chip");
   if (!chip) return;
@@ -669,6 +696,8 @@ async function hledej(pripojit = false) {
     resultsEl.innerHTML = "";
     controlsRow.style.display = "none";
     loadMoreBtn.style.display = "none";
+    hledacText = "";
+    hledacInput.value = "";
   }
 
   try {
@@ -694,6 +723,7 @@ async function hledej(pripojit = false) {
     const obecInfo = data.obecPouzita ? ` (hledáno v: ${data.obecPouzita})` : "";
     statusEl.textContent = `Nalezeno celkem ${pocetCelkem}, načteno ${vsechnyFirmy.length}.${obecInfo}`;
     controlsRow.style.display = vsechnyFirmy.length ? "flex" : "none";
+    hledacRow.style.display = vsechnyFirmy.length ? "block" : "none";
     vykresli();
 
     if (vsechnyFirmy.length < pocetCelkem) {
