@@ -87,6 +87,12 @@
     border-radius: 10px; font-size: 14px; background: #fffefc; color: var(--ink);
   }
   .hledac-row input:focus { outline: none; border-color: var(--accent); }
+  .hledac-pole-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .hledac-pole-btn {
+    background: white; color: var(--muted); border: 1px solid var(--border-soft);
+    border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .hledac-pole-btn.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
   .level-group { margin-bottom: 24px; }
   .level-title {
     font-weight: 700; font-size: 14.5px; margin: 0 0 8px 4px; color: var(--ink);
@@ -231,6 +237,12 @@
   <div id="status" class="status"></div>
   <div id="hledacRow" class="hledac-row" style="display:none;">
     <input type="text" id="hledacInput" placeholder="🔍 Hledat v načtených výsledcích (ulice, jméno, obor)…" />
+    <div class="hledac-pole-row">
+      <span class="field-label" style="margin:0;">Hledat v:</span>
+      <button class="hledac-pole-btn active" data-pole="nazev">Jméno</button>
+      <button class="hledac-pole-btn active" data-pole="adresa">Adresa</button>
+      <button class="hledac-pole-btn active" data-pole="obor">Obor</button>
+    </div>
   </div>
   <div id="statusChipsRow" class="status-chips-row" style="display:none;"></div>
   <div id="controlsRow" class="controls-row" style="display:none;">
@@ -346,6 +358,7 @@ let aktivniStatusFiltr = null; // null = bez filtru, jinak kód ze STAVY (K/P/O/
 const hledacRow = document.getElementById("hledacRow");
 const hledacInput = document.getElementById("hledacInput");
 let hledacText = ""; // filtr napříč jménem/adresou/oborem v už načtených výsledcích
+let hledacPole = new Set(["nazev", "adresa", "obor"]); // ve kterých polích se hledá — dá se omezit tlačítky
 
 // stav aktuálního hledání (pro stránkování a řazení)
 let vsechnyFirmy = [];
@@ -495,7 +508,11 @@ function vykresliStatusChips() {
 function odpovidaHledaci(f) {
   if (!hledacText) return true;
   const obory = (f.czNace || []).map(nazevOboru).join(" ");
-  const text = `${f.nazev || ""} ${f.adresa || ""} ${f.obec || ""} ${obory}`.toLowerCase();
+  const casti = [];
+  if (hledacPole.has("nazev")) casti.push(f.nazev || "");
+  if (hledacPole.has("adresa")) casti.push(f.adresa || "", f.obec || "");
+  if (hledacPole.has("obor")) casti.push(obory);
+  const text = casti.join(" ").toLowerCase();
   return text.includes(hledacText.toLowerCase());
 }
 
@@ -652,6 +669,21 @@ document.querySelectorAll(".form-pill").forEach((pill) => {
 hledacInput.addEventListener("input", () => {
   hledacText = hledacInput.value.trim();
   vykresli();
+});
+
+document.querySelectorAll(".hledac-pole-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const pole = btn.dataset.pole;
+    if (hledacPole.has(pole)) {
+      if (hledacPole.size === 1) return; // aspoň jedno pole musí zůstat zapnuté
+      hledacPole.delete(pole);
+      btn.classList.remove("active");
+    } else {
+      hledacPole.add(pole);
+      btn.classList.add("active");
+    }
+    vykresli();
+  });
 });
 
 statusChipsRow.addEventListener("click", (e) => {
