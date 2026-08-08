@@ -82,12 +82,17 @@
   .stat-tile .lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
   .status { margin: 12px 0; color: var(--muted); font-size: 14px; }
   .hledac-row { margin: 4px 0 10px; }
-  .hledac-row input {
-    width: 100%; padding: 10px 13px; border: 1px solid var(--border-soft);
+  .hledac-input-wrap { display: flex; gap: 6px; }
+  .hledac-input-wrap input {
+    flex: 1; padding: 10px 13px; border: 1px solid var(--border-soft);
     border-radius: 10px; font-size: 14px; background: #fffefc; color: var(--ink);
   }
-  .hledac-row input:focus { outline: none; border-color: var(--accent); }
-  .hledac-pole-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .hledac-input-wrap input:focus { outline: none; border-color: var(--accent); }
+  .hledac-pole-toggle {
+    background: white; border: 1px solid var(--border-soft); border-radius: 10px;
+    padding: 0 12px; font-size: 16px; cursor: pointer; flex-shrink: 0;
+  }
+  .hledac-pole-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
   .hledac-pole-btn {
     background: white; color: var(--muted); border: 1px solid var(--border-soft);
     border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
@@ -236,8 +241,11 @@
 
   <div id="status" class="status"></div>
   <div id="hledacRow" class="hledac-row" style="display:none;">
-    <input type="text" id="hledacInput" placeholder="🔍 Hledat v načtených výsledcích (ulice, jméno, obor)…" />
-    <div class="hledac-pole-row">
+    <div class="hledac-input-wrap">
+      <input type="text" id="hledacInput" placeholder="🔍 Hledat v načtených výsledcích…" />
+      <button id="hledacPoleToggle" class="hledac-pole-toggle" title="Kde přesně hledat">🎯</button>
+    </div>
+    <div id="hledacPoleRow" class="hledac-pole-row" style="display:none;">
       <span class="field-label" style="margin:0;">Hledat v:</span>
       <button class="hledac-pole-btn active" data-pole="nazev">Jméno</button>
       <button class="hledac-pole-btn active" data-pole="adresa">Adresa</button>
@@ -246,11 +254,6 @@
   </div>
   <div id="statusChipsRow" class="status-chips-row" style="display:none;"></div>
   <div id="controlsRow" class="controls-row" style="display:none;">
-    <div id="toggleHiddenRow" class="filter-tabs">
-      <button class="filter-tab active" data-filter="aktivni">Aktivní</button>
-      <button class="filter-tab" data-filter="vyrizene">Vyřízené</button>
-      <button class="filter-tab" data-filter="vse">Vše</button>
-    </div>
     <div class="sort-tabs">
       <span class="field-label" style="margin:0;">Řadit:</span>
       <button class="sort-tab active" data-sort="skore">Skóre</button>
@@ -349,12 +352,10 @@ const resultsEl = document.getElementById("results");
 const searchBtn = document.getElementById("searchBtn");
 const loadMoreBtn = document.getElementById("loadMoreBtn");
 const controlsRow = document.getElementById("controlsRow");
-const toggleHiddenRow = document.getElementById("toggleHiddenRow");
 const sortTabsRow = document.querySelector(".sort-tabs");
 let aktivniRazeni = "skore"; // skore | vek | nazev
 const statusChipsRow = document.getElementById("statusChipsRow");
-let aktivniFiltr = "aktivni"; // aktivni | vyrizene | vse
-let aktivniStatusFiltr = null; // null = bez filtru, jinak kód ze STAVY (K/P/O/N/Z/X)
+let aktivniZobrazeni = "bez-stavu"; // bez-stavu | vse | vyrizene | konkrétní kód ze STAVY (K/P/O/E/T/N/Z/X/V)
 const hledacRow = document.getElementById("hledacRow");
 const hledacInput = document.getElementById("hledacInput");
 let hledacText = ""; // filtr napříč jménem/adresou/oborem v už načtených výsledcích
@@ -462,19 +463,14 @@ function vykresliStatTiles(firmy) {
     tilesEl.style.display = "none";
     return;
   }
-  const pocty = { 1: 0, 2: 0, 3: 0, 4: 0 };
   let vyrizenoPocet = 0;
   for (const f of firmy) {
-    pocty[f.uroven] = (pocty[f.uroven] || 0) + 1;
     if (stavyMap[f.ico]?.status) vyrizenoPocet++;
   }
-  const kratkeLabely = { 1: "Nejvhodnější", 2: "Dobří", 3: "Možní", 4: "Nevhodné" };
+  const bezStavu = firmy.length - vyrizenoPocet;
   const dlazdice = [
     { num: firmy.length, lbl: "Celkem načteno", color: "var(--ink)" },
-    { num: pocty[1], lbl: kratkeLabely[1], color: LEVELS[1].color },
-    { num: pocty[2], lbl: kratkeLabely[2], color: LEVELS[2].color },
-    { num: pocty[3], lbl: kratkeLabely[3], color: LEVELS[3].color },
-    { num: pocty[4], lbl: kratkeLabely[4], color: LEVELS[4].color },
+    { num: bezStavu, lbl: "K oslovení", color: LEVELS[1].color },
     { num: vyrizenoPocet, lbl: "Vyřízeno", color: "var(--accent)" },
   ];
   tilesEl.innerHTML = dlazdice
@@ -483,25 +479,35 @@ function vykresliStatTiles(firmy) {
   tilesEl.style.display = "grid";
 }
 
-function vykresliStatusChips() {
+function vykresliZobrazeniChips() {
   if (!vsechnyFirmy.length) {
     statusChipsRow.style.display = "none";
     return;
   }
   const pocty = {};
   for (const kod of Object.keys(STAVY)) pocty[kod] = 0;
+  let vyrizenoPocet = 0;
+  let bezStavuPocet = 0;
   for (const f of vsechnyFirmy) {
     const s = stavyMap[f.ico]?.status;
-    if (s && pocty[s] !== undefined) pocty[s]++;
+    if (s) {
+      vyrizenoPocet++;
+      if (pocty[s] !== undefined) pocty[s]++;
+    } else {
+      bezStavuPocet++;
+    }
   }
-  const vseChip = `<button class="status-chip all-chip ${aktivniStatusFiltr === null ? "active" : ""}" data-status="">Vše (${vsechnyFirmy.length})</button>`;
-  const chips = Object.entries(STAVY)
-    .map(([kod, info]) => {
-      const aktivni = aktivniStatusFiltr === kod ? "active" : "";
-      return `<button class="status-chip ${aktivni}" data-status="${kod}" style="--chip-color:${info.color}">${info.label} (${pocty[kod]})</button>`;
-    })
+  const chip = (klic, label, pocet, styl = "") => {
+    const aktivni = aktivniZobrazeni === klic ? "active" : "";
+    return `<button class="status-chip ${aktivni}" data-zobrazeni="${klic}" ${styl}>${label} (${pocet})</button>`;
+  };
+  let html = chip("bez-stavu", "Aktivní", bezStavuPocet);
+  html += chip("vse", "Vše", vsechnyFirmy.length);
+  html += chip("vyrizene", "Vyřízené", vyrizenoPocet);
+  html += Object.entries(STAVY)
+    .map(([kod, info]) => chip(kod, info.label, pocty[kod], `style="--chip-color:${info.color}"`))
     .join("");
-  statusChipsRow.innerHTML = vseChip + chips;
+  statusChipsRow.innerHTML = html;
   statusChipsRow.style.display = "flex";
 }
 
@@ -518,11 +524,8 @@ function odpovidaHledaci(f) {
 
 function vykresli() {
   vykresliStatTiles(vsechnyFirmy);
-  vykresliStatusChips();
+  vykresliZobrazeniChips();
   let firmy = serazeneFirmy();
-  if (aktivniStatusFiltr) {
-    firmy = firmy.filter((f) => stavyMap[f.ico]?.status === aktivniStatusFiltr);
-  }
   if (hledacText) {
     firmy = firmy.filter(odpovidaHledaci);
   }
@@ -532,7 +535,7 @@ function vykresli() {
     return;
   }
 
-  if (aktivniFiltr === "vyrizene") {
+  if (aktivniZobrazeni === "vyrizene") {
     // Vyřízené: seřadit podle data poslední změny (nejnovější první), ne podle úrovně
     let vyrizene = firmy.filter((f) => stavyMap[f.ico]?.status);
     vyrizene.sort((a, b) => new Date(stavyMap[b.ico]?.datum || 0) - new Date(stavyMap[a.ico]?.datum || 0));
@@ -547,15 +550,24 @@ function vykresli() {
     return;
   }
 
+  if (aktivniZobrazeni === "bez-stavu") {
+    firmy = firmy.filter((f) => !stavyMap[f.ico]?.status);
+  } else if (aktivniZobrazeni !== "vse") {
+    // konkrétní status kód (K/P/O/E/T/N/Z/X/V)
+    firmy = firmy.filter((f) => stavyMap[f.ico]?.status === aktivniZobrazeni);
+  }
+  // "vse" nefiltruje nic
+
+  if (!firmy.length) {
+    resultsEl.innerHTML = `<div class="empty">Žádné firmy v tomhle zobrazení.</div>`;
+    return;
+  }
+
   const podleUrovne = aktivniRazeni === "skore";
   const urovneKZobrazeni = podleUrovne ? [1, 2, 3, 4] : ["vse"];
 
   for (const uroven of urovneKZobrazeni) {
     let skupina = podleUrovne ? firmy.filter((f) => f.uroven === uroven) : firmy;
-    if (aktivniFiltr === "aktivni") {
-      skupina = skupina.filter((f) => !stavyMap[f.ico]?.status);
-    }
-    // "vse" nefiltruje nic
     if (!skupina.length) continue;
     const wrap = document.createElement("div");
     wrap.className = "level-group";
@@ -671,6 +683,13 @@ hledacInput.addEventListener("input", () => {
   vykresli();
 });
 
+const hledacPoleToggle = document.getElementById("hledacPoleToggle");
+const hledacPoleRow = document.getElementById("hledacPoleRow");
+hledacPoleToggle.addEventListener("click", () => {
+  const zobrazeno = hledacPoleRow.style.display !== "none";
+  hledacPoleRow.style.display = zobrazeno ? "none" : "flex";
+});
+
 document.querySelectorAll(".hledac-pole-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     const pole = btn.dataset.pole;
@@ -689,15 +708,7 @@ document.querySelectorAll(".hledac-pole-btn").forEach((btn) => {
 statusChipsRow.addEventListener("click", (e) => {
   const chip = e.target.closest(".status-chip");
   if (!chip) return;
-  aktivniStatusFiltr = chip.dataset.status || null;
-  vykresli();
-});
-
-toggleHiddenRow.addEventListener("click", (e) => {
-  const tab = e.target.closest(".filter-tab");
-  if (!tab) return;
-  aktivniFiltr = tab.dataset.filter;
-  toggleHiddenRow.querySelectorAll(".filter-tab").forEach((t) => t.classList.toggle("active", t === tab));
+  aktivniZobrazeni = chip.dataset.zobrazeni;
   vykresli();
 });
 
