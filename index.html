@@ -111,16 +111,35 @@
     border: 1px solid var(--accent); border-radius: 999px; padding: 3px 10px;
   }
   .empty { text-align: center; color: var(--muted); padding: 40px 0; }
-  .controls-row { display: flex; gap: 10px; align-items: center; margin: 10px 0 16px; flex-wrap: wrap; }
-  .controls-row select {
-    padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: 10px; font-size: 14px; background: white;
+  .settings-toggle {
+    cursor: pointer; font-size: 13px; color: var(--muted); font-weight: 600;
+    padding: 6px 2px; list-style: none;
+  }
+  .settings-toggle::-webkit-details-marker { display: none; }
+  .settings-toggle::before { content: "▸ "; }
+  details[open] .settings-toggle::before { content: "▾ "; }
+  #nastaveniDetails .worker-url-row { margin-top: 8px; }
+
+  .controls-row {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 10px; margin: 10px 0 16px; flex-wrap: wrap;
+  }
+  .sort-tabs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .sort-tab {
+    padding: 7px 14px; border-radius: 999px; border: 1px solid var(--border-soft);
+    background: white; color: var(--ink); font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  .sort-tab.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  @media (max-width: 560px) {
+    .controls-row { flex-direction: column; align-items: stretch; }
+    .filter-tabs, .sort-tabs { justify-content: center; }
   }
   .load-more-btn {
     display: block; margin: 20px auto; background: white; color: var(--accent);
     border: 1px solid var(--accent);
   }
   .load-more-btn:disabled { opacity: 0.5; }
-  .filter-tabs { display: flex; gap: 6px; margin: 10px 0 16px; }
+  .filter-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
   .filter-tab {
     padding: 8px 18px; border-radius: 999px; border: 1px solid var(--border-soft);
     background: white; color: var(--ink); font-size: 14px; cursor: pointer; font-weight: 600;
@@ -187,30 +206,33 @@
       <button class="form-pill active" data-forma="as" style="--pill-color:#eeb098;">a. s.</button>
     </div>
 
-    <div class="worker-url-row">
-      Adresa Worker proxy (vyplň jednou, appka si ji zapamatuje v prohlížeči):
-      <input type="text" id="workerUrl" placeholder="https://tvuj-worker.tvuj-ucet.workers.dev" />
-    </div>
-    <div class="hint-box">
-      v1.3: hledá jen ve sledovaných oborech (viz níže), aby se vešla pod limit ARES. Nová obec — zkontroluj v hlášce pod tlačítkem Hledat, kde appka reálně hledala.
-    </div>
+    <details id="nastaveniDetails">
+      <summary class="settings-toggle">⚙️ Nastavení</summary>
+      <div class="worker-url-row">
+        Adresa Worker proxy (vyplň jednou, appka si ji zapamatuje v prohlížeči):
+        <input type="text" id="workerUrl" placeholder="https://tvuj-worker.tvuj-ucet.workers.dev" />
+      </div>
+      <div class="hint-box">
+        v1.3: hledá jen ve sledovaných oborech (viz níže), aby se vešla pod limit ARES. Nová obec — zkontroluj v hlášce pod tlačítkem Hledat, kde appka reálně hledala.
+      </div>
+    </details>
     <div id="statTiles" class="stat-tiles" style="display:none;"></div>
   </div>
 
   <div id="status" class="status"></div>
   <div id="statusChipsRow" class="status-chips-row" style="display:none;"></div>
   <div id="controlsRow" class="controls-row" style="display:none;">
-    <label for="sortSelect">Řadit podle:</label>
-    <select id="sortSelect">
-      <option value="skore">Skóre (výchozí)</option>
-      <option value="vek">Stáří firmy (nejnovější první)</option>
-      <option value="nazev">Název (A–Z)</option>
-    </select>
-  </div>
-  <div id="toggleHiddenRow" class="filter-tabs" style="display:none;">
-    <button class="filter-tab active" data-filter="aktivni">Aktivní</button>
-    <button class="filter-tab" data-filter="vyrizene">Vyřízené</button>
-    <button class="filter-tab" data-filter="vse">Vše</button>
+    <div id="toggleHiddenRow" class="filter-tabs">
+      <button class="filter-tab active" data-filter="aktivni">Aktivní</button>
+      <button class="filter-tab" data-filter="vyrizene">Vyřízené</button>
+      <button class="filter-tab" data-filter="vse">Vše</button>
+    </div>
+    <div class="sort-tabs">
+      <span class="field-label" style="margin:0;">Řadit:</span>
+      <button class="sort-tab active" data-sort="skore">Skóre</button>
+      <button class="sort-tab" data-sort="vek">Stáří</button>
+      <button class="sort-tab" data-sort="nazev">Název</button>
+    </div>
   </div>
   <div id="results"></div>
   <button id="loadMoreBtn" class="load-more-btn" style="display:none;">Načíst dalších 50</button>
@@ -300,8 +322,9 @@ const resultsEl = document.getElementById("results");
 const searchBtn = document.getElementById("searchBtn");
 const loadMoreBtn = document.getElementById("loadMoreBtn");
 const controlsRow = document.getElementById("controlsRow");
-const sortSelect = document.getElementById("sortSelect");
 const toggleHiddenRow = document.getElementById("toggleHiddenRow");
+const sortTabsRow = document.querySelector(".sort-tabs");
+let aktivniRazeni = "skore"; // skore | vek | nazev
 const statusChipsRow = document.getElementById("statusChipsRow");
 let aktivniFiltr = "aktivni"; // aktivni | vyrizene | vse
 let aktivniStatusFiltr = null; // null = bez filtru, jinak kód ze STAVY (K/P/O/N/Z/X)
@@ -369,7 +392,7 @@ function seradDavku(davka, zpusob) {
 }
 
 function pridatDavku(davka, resetPoradi) {
-  const zpusob = sortSelect.value;
+  const zpusob = aktivniRazeni;
   for (const f of davka) firmyMap[f.ico] = f;
   if (resetPoradi) {
     poradiIco = seradDavku(davka, zpusob).map((f) => f.ico);
@@ -380,7 +403,7 @@ function pridatDavku(davka, resetPoradi) {
 }
 
 function prerovnatVse() {
-  const zpusob = sortSelect.value;
+  const zpusob = aktivniRazeni;
   const vsechny = poradiIco.map((ico) => firmyMap[ico]);
   poradiIco = seradDavku(vsechny, zpusob).map((f) => f.ico);
 }
@@ -479,7 +502,7 @@ function vykresli() {
     return;
   }
 
-  const podleUrovne = sortSelect.value === "skore";
+  const podleUrovne = aktivniRazeni === "skore";
   const urovneKZobrazeni = podleUrovne ? [1, 2, 3, 4] : ["vse"];
 
   for (const uroven of urovneKZobrazeni) {
@@ -611,7 +634,11 @@ toggleHiddenRow.addEventListener("click", (e) => {
   vykresli();
 });
 
-sortSelect.addEventListener("change", () => {
+sortTabsRow.addEventListener("click", (e) => {
+  const tab = e.target.closest(".sort-tab");
+  if (!tab) return;
+  aktivniRazeni = tab.dataset.sort;
+  sortTabsRow.querySelectorAll(".sort-tab").forEach((t) => t.classList.toggle("active", t === tab));
   prerovnatVse();
   vykresli();
 });
@@ -659,7 +686,6 @@ async function hledej(pripojit = false) {
     const obecInfo = data.obecPouzita ? ` (hledáno v: ${data.obecPouzita})` : "";
     statusEl.textContent = `Nalezeno celkem ${pocetCelkem}, načteno ${vsechnyFirmy.length}.${obecInfo}`;
     controlsRow.style.display = vsechnyFirmy.length ? "flex" : "none";
-    toggleHiddenRow.style.display = vsechnyFirmy.length ? "flex" : "none";
     vykresli();
 
     if (vsechnyFirmy.length < pocetCelkem) {
