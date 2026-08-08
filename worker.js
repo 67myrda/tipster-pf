@@ -20,19 +20,12 @@
 const ARES_BASE = "https://ares.gov.cz/ekonomicke-subjekty-v-be/rest";
 
 /**
- * Kódy obcí (RÚIAN/ČSÚ) — ověřeno ručně přes epusa.cz / risy.cz.
- * "textovaAdresa" jako volný text hledá moc široce (Rychnov n. Kn.
- * vrátilo 2462 výsledků napříč ČR), proto potřebujeme přesný kód.
- * Doplňuj postupně, jak přibývají cílová města. Kód najdeš na
- * epusa.cz (vyhledej obec -> pole "Kód obce") nebo risy.cz.
+ * Poznámka: appka už NEPOUŽÍVÁ ruční tabulku kódů obcí (KODY_OBCI byla
+ * smazána 8.8.2026) — hledání obce jde přes sidlo.textovaAdresa (volný
+ * text), funguje pro libovolnou obec bez nutnosti dopředu znát kód.
+ * Pro power-user případy (přesná obec/část obce) jde kód pořád zadat
+ * ručně přes ?kodObce=CISLO (najdeš na epusa.cz/risy.cz).
  */
-const KODY_OBCI = {
-  "rychnov nad kněžnou": 576069,
-  // "dobruška": ???,
-  // "opočno": ???,
-  // "solnice": ???,
-  // ... doplnit před rozšířením na další obce
-};
 
 // CORS hlavičky — appka na GitHub Pages smí volat tenhle Worker odkudkoli
 function corsHeaders() {
@@ -74,33 +67,49 @@ function jsonResponse(data, status = 200) {
  * Pořadí je důležité: specifičtější obory (podlahářství, truhlářství...) se
  * testují DŘÍV než obecné "stavebnictví", aby do něj nespadly omylem.
  */
-const NACE_KATEGORIE = [
-  { obor: "reality", vaha: 25, prefixy: ["68"] },
-  { obor: "pohostinství", vaha: 25, prefixy: ["561", "562", "563"] },
-  { obor: "autoškola", vaha: 20, prefixy: ["8553"] },
-  { obor: "autoservis", vaha: 20, prefixy: ["9531", "9532"] },
-  { obor: "podlahářství", vaha: 15, prefixy: ["4333", "1622", "4753"] },
-  { obor: "truhlářství/nábytek", vaha: 15, prefixy: ["1623", "4332", "3100"] },
-  { obor: "kamenictví", vaha: 15, prefixy: ["2370", "0811", "2369"] },
-  { obor: "kominictví", vaha: 15, prefixy: ["8122"] },
-  { obor: "střechy", vaha: 15, prefixy: ["4391", "4341"] },
-  { obor: "palivové dřevo", vaha: 15, prefixy: ["0220", "1610", "1621", "1629", "4673"] },
-  { obor: "kovovýroba", vaha: 15, prefixy: ["25", "2410", "2420", "2433", "2434"] },
-  { obor: "elektro", vaha: 15, prefixy: ["4321", "4754", "4643", "2711", "2712", "3314"] },
-  { obor: "optika", vaha: 15, prefixy: ["4774", "3250", "2670"] },
-  { obor: "pohřební služby", vaha: 15, prefixy: ["9630"] },
-  { obor: "klenotnictví", vaha: 10, prefixy: ["3212", "3213", "4777", "9525"] },
-  { obor: "stavebnictví (obecně)", vaha: 20, prefixy: ["41", "42", "43"] },
-];
+/**
+ * Konkrétní CZ-NACE kódy (5místné, leaf úroveň) pro KAŽDOU kategorii —
+ * používají se jako SKUTEČNÝ FILTR dotazu do ARES (ne jen skóre), aby se
+ * zúžil počet výsledků na naše sledované obory a appka se vešla pod
+ * strop ARES (1000 záznamů na dotaz).
+ *
+ * Míra jistoty u jednotlivých kódů (STAV k 8.8.2026):
+ *  - "ověřeno" = viděno naživo v /nace-ciselnik appky (screenshot)
+ *  - "Perplexity" = doplněno přes Perplexity, NEOVĚŘENO appkou naživo
+ * V komentáři u každé kategorie je uvedeno, co platí.
+ */
+const NACE_KODY = {
+  reality: { vaha: 25, kody: ["68110", "68120", "68200", "68310", "68320"] }, // Perplexity
+  pohostinství: { vaha: 25, kody: ["56110", "56210", "56290", "56300"] }, // odvozeno z ověřených 561/562/563
+  autoškola: { vaha: 20, kody: ["85530"] }, // ověřeno
+  autoservis: { vaha: 20, kody: ["95310", "95320"] }, // ověřeno
+  "podlahářství": { vaha: 15, kody: ["43330", "16220", "47530"] }, // ověřeno
+  "truhlářství/nábytek": { vaha: 15, kody: ["16230", "43320", "31000", "46470", "47550", "95240"] }, // ověřeno
+  kamenictví: { vaha: 15, kody: ["23700", "08110"] }, // ověřeno
+  kominictví: { vaha: 15, kody: ["81220"] }, // Perplexity
+  střechy: { vaha: 15, kody: ["43910", "43410"] }, // Perplexity
+  "palivové dřevo": { vaha: 15, kody: ["02200", "16100", "16210", "16290", "46730"] }, // Perplexity
+  kovovýroba: {
+    vaha: 15,
+    kody: ["25110", "25120", "25400", "25610", "25620", "25910", "25920", "25930", "25940", "25990", "24100", "24200", "24330", "24340", "46720", "47520", "38320"],
+  }, // Perplexity
+  elektro: { vaha: 15, kody: ["43210", "47540", "46430", "27110", "27120", "33140"] }, // Perplexity
+  optika: { vaha: 15, kody: ["47740", "32500", "26700"] }, // Perplexity
+  "pohřební služby": { vaha: 15, kody: ["96300"] }, // ověřeno
+  klenotnictví: { vaha: 10, kody: ["46480", "47770", "32120", "32130", "95250"] }, // 46480+47770 ověřeno, zbytek Perplexity
+  "stavebnictví (obecně)": { vaha: 20, kody: ["43240", "43350", "43420", "43500", "43600", "43990"] }, // ověřeno
+};
+
+// Plochý seznam VŠECH sledovaných kódů — použije se jako výchozí filtr do ARES,
+// aby appka nestahovala úplně všechny firmy v obci, ale jen naše top-obory.
+const VSECHNY_SLEDOVANE_NACE_KODY = Object.values(NACE_KODY).flatMap((k) => k.kody);
 
 function obodujOborNace(czNaceList) {
   if (!czNaceList || czNaceList.length === 0) return null;
-  for (const kat of NACE_KATEGORIE) {
-    for (const kodRaw of czNaceList) {
-      const kod = String(kodRaw);
-      if (kat.prefixy.some((p) => kod.startsWith(p))) {
-        return kat;
-      }
+  const kodySet = new Set(czNaceList.map(String));
+  for (const [obor, data] of Object.entries(NACE_KODY)) {
+    if (data.kody.some((k) => kodySet.has(k))) {
+      return { obor, vaha: data.vaha };
     }
   }
   return null;
@@ -186,61 +195,27 @@ async function nactiNaceCiselnik() {
 }
 
 /**
- * Dohledá kód obce (RÚIAN) podle názvu přes ARES standardizaci adres.
- * STAV: NEOVĚŘENO ŽIVĚ — endpoint /standardizovane-adresy/vyhledat existuje
- * v oficiálním ARES OpenAPI schématu a přijímá "komplexní filtr", ale
- * přesný název pole pro volný text (předpoklad: "textovaAdresa", po vzoru
- * ostatních filtrů v tomtéž API) jsem nemohl otestovat živě (bez síťového
- * přístupu k ares.gov.cz z mého prostředí). PRVNÍ OSTRÉ POUŽITÍ OVĚŘ:
- * zadej známou obec (např. "Rychnov nad Kněžnou") a zkontroluj, že vrácené
- * kodObce sedí na hodnotu 576069 v tabulce KODY_OBCI níž.
- * Pokud to nebude fungovat, appka se bezpečně vrátí k chybové hlášce
- * (žádné tiché/špatné výsledky) — viz volání v /search níž.
+ * ZMĚNA 8.8.2026: Předchozí přístup (zjistiKodObce -> samostatný endpoint
+ * /standardizovane-adresy/vyhledat) se v živém testu ukázal nefunkční a
+ * appka ho nedokázala ověřit (žádný ze 4 zkoušených tvarů dotazu nezabral).
+ * Místo dalšího hádání používáme pole "textovaAdresa" přímo v HLAVNÍM
+ * vyhledávacím filtru (sidlo.textovaAdresa) — to je stejný endpoint, který
+ * appka celý večer prokazatelně úspěšně používala (kodObce varianta).
+ * Riziko: textovaAdresa hledá volný text v adrese, takže méně přesné jméno
+ * obce by teoreticky mohlo najít i podobně znějící místo jinde v ČR — proto
+ * appka vrací "obecPouzita" s adresou první nalezené firmy, abys hned viděl,
+ * kde appka reálně hledala.
  */
-async function zjistiKodObce(nazevObce) {
-  // Živý test (7.8.2026, "Solnice") ukázal, že první tvar dotazu ("textovaAdresa" na
-  // nejvyšší úrovni) nefungoval. Protože odsud nemám síťový přístup k ares.gov.cz
-  // a nemůžu to ověřit sám, zkouším postupně víc pravděpodobných tvarů těla dotazu.
-  // Až se ukáže, který (pokud vůbec nějaký) funguje, tenhle seznam zjednodušíme.
-  const pokusy = [
-    { textovaAdresa: nazevObce, pocet: 5 },
-    { adresa: { textovaAdresa: nazevObce }, pocet: 5 },
-    { obec: { nazevObce }, pocet: 5 },
-    { nazevObce, pocet: 5 },
-  ];
-  for (const telo of pokusy) {
-    try {
-      const resp = await fetch(`${ARES_BASE}/standardizovane-adresy/vyhledat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(telo),
-      });
-      if (!resp.ok) continue;
-      const data = await resp.json();
-      const adresy = data.standardizovaneAdresy || [];
-      if (adresy.length === 0) continue;
-      // Vezmi první výsledek, jehož název obce se shoduje (case-insensitive) se zadáním,
-      // ať nevybereme omylem nějakou ulici/část obce se stejným kódem, ale jiným místem.
-      const shoda =
-        adresy.find((a) => (a.nazevObce || "").trim().toLowerCase() === nazevObce.trim().toLowerCase()) ||
-        adresy[0];
-      if (shoda && shoda.kodObce) {
-        return { kodObce: shoda.kodObce, nazevObce: shoda.nazevObce || nazevObce };
-      }
-    } catch (e) {
-      // zkus další tvar dotazu
-    }
-  }
-  return null;
-}
 
-async function hledejFirmy(kodObce, naceList, pravniFormaList, obchodniJmeno, start = 0, pocet = 50) {
+async function hledejFirmy(kodObce, textAdresy, naceList, pravniFormaList, obchodniJmeno, start = 0, pocet = 50) {
   const filtr = {
     start,
     pocet,
   };
   if (kodObce) {
     filtr.sidlo = { kodObce };
+  } else if (textAdresy) {
+    filtr.sidlo = { textovaAdresa: textAdresy };
   }
   if (obchodniJmeno) {
     filtr.obchodniJmeno = obchodniJmeno;
@@ -279,18 +254,18 @@ async function hledejFirmy(kodObce, naceList, pravniFormaList, obchodniJmeno, st
  * není 100% přesné (obě skupiny stránkují nezávisle na sobě), ale pro první
  * várky nejlépe skórovaných firem to funguje spolehlivě.
  */
-async function hledejFirmyRozdeleno(kodObce, naceList, pravniFormaList, obchodniJmeno, start, pocet) {
+async function hledejFirmyRozdeleno(kodObce, textAdresy, naceList, pravniFormaList, obchodniJmeno, start, pocet) {
   if (!pravniFormaList || pravniFormaList.length <= 1) {
-    return hledejFirmy(kodObce, naceList, pravniFormaList, obchodniJmeno, start, pocet);
+    return hledejFirmy(kodObce, textAdresy, naceList, pravniFormaList, obchodniJmeno, start, pocet);
   }
   const osvcFormy = pravniFormaList.filter((f) => ["101", "102"].includes(f));
   const firemniFormy = pravniFormaList.filter((f) => !["101", "102"].includes(f));
   const skupiny = [osvcFormy, firemniFormy].filter((s) => s.length > 0);
   if (skupiny.length <= 1) {
-    return hledejFirmy(kodObce, naceList, pravniFormaList, obchodniJmeno, start, pocet);
+    return hledejFirmy(kodObce, textAdresy, naceList, pravniFormaList, obchodniJmeno, start, pocet);
   }
   const vysledky = await Promise.all(
-    skupiny.map((skupina) => hledejFirmy(kodObce, naceList, skupina, obchodniJmeno, start, pocet))
+    skupiny.map((skupina) => hledejFirmy(kodObce, textAdresy, naceList, skupina, obchodniJmeno, start, pocet))
   );
   return {
     pocetCelkem: vysledky.reduce((soucet, v) => soucet + (v.pocetCelkem || 0), 0),
@@ -318,41 +293,37 @@ export default {
     if (url.pathname === "/search") {
       const obec = url.searchParams.get("obec");
       const kodObceParam = url.searchParams.get("kodObce");
-      const naceParam = url.searchParams.get("nace"); // čárkou oddělené kódy, volitelné
+      const naceParam = url.searchParams.get("nace"); // čárkou oddělené kódy, přepíše výchozí sledované obory
+      const vsechnyObory = url.searchParams.get("vsechnyObory") === "1"; // únikový poklop — vypne NACE filtr úplně
       const start = parseInt(url.searchParams.get("start") || "0", 10);
       const obchodniJmeno = url.searchParams.get("jmeno"); // volitelné hledání podle (části) názvu firmy
 
-      let kodObce = kodObceParam ? parseInt(kodObceParam, 10) : null;
-      let obecPouzita = null;
-      if (!kodObce && obec) {
-        kodObce = KODY_OBCI[obec.trim().toLowerCase()];
-        if (kodObce) obecPouzita = obec.trim();
-      }
-      if (!kodObce && obec) {
-        // Obec není v ruční tabulce (cache) -> zkus dohledat automaticky přes ARES/RÚIAN.
-        const nalezeno = await zjistiKodObce(obec.trim());
-        if (nalezeno) {
-          kodObce = nalezeno.kodObce;
-          obecPouzita = nalezeno.nazevObce;
-        }
-      }
-      if (!kodObce && !obchodniJmeno) {
-        return jsonResponse(
-          {
-            error: obec
-              ? `Obec "${obec}" se nepodařilo dohledat (ani ručně v tabulce, ani automaticky přes ARES). Zkus zavolat ?kodObce=CISLO ručně (kód najdeš na epusa.cz/risy.cz), nebo hledej podle ?jmeno= bez obce.`
-              : "Chybí parametr ?obec=, ?kodObce=, nebo ?jmeno=",
-          },
-          400
-        );
+      const kodObce = kodObceParam ? parseInt(kodObceParam, 10) : null;
+      const textAdresy = !kodObce && obec ? obec.trim() : null;
+      const obecPouzita = textAdresy || (kodObce ? `kód obce ${kodObce}` : null);
+
+      if (!kodObce && !textAdresy && !obchodniJmeno) {
+        return jsonResponse({ error: "Chybí parametr ?obec=, ?kodObce=, nebo ?jmeno=" }, 400);
       }
 
-      const naceList = naceParam ? naceParam.split(",").map((s) => s.trim()) : null;
+      // Výchozí chování: filtruj rovnou na naše sledované obory (viz NACE_KODY výš),
+      // aby se appka vešla pod strop ARES a zároveň hledala jen relevantní firmy.
+      // ?nace=... přepíše vlastním seznamem, ?vsechnyObory=1 filtr úplně vypne
+      // (pozor, u obcí s hodně firmami pak snadno narazíš na strop 1000).
+      let naceList;
+      if (naceParam) {
+        naceList = naceParam.split(",").map((s) => s.trim());
+      } else if (!vsechnyObory && (obec || kodObce)) {
+        naceList = VSECHNY_SLEDOVANE_NACE_KODY;
+      } else {
+        naceList = null;
+      }
+
       const pfParam = url.searchParams.get("pravniForma"); // čárkou oddělené kódy, volitelné
       const pravniFormaList = pfParam ? pfParam.split(",").map((s) => s.trim()) : null;
 
       try {
-        const vysledek = await hledejFirmyRozdeleno(kodObce, naceList, pravniFormaList, obchodniJmeno, start, 50);
+        const vysledek = await hledejFirmyRozdeleno(kodObce, textAdresy, naceList, pravniFormaList, obchodniJmeno, start, 50);
         const subjekty = (vysledek.ekonomickeSubjekty || []).map((s) => {
           const { skore, uroven, duvody } = skoreFirmy(s);
           return {
@@ -374,11 +345,18 @@ export default {
           pocetCelkem: vysledek.pocetCelkem,
           vraceno: subjekty.length,
           obecPouzita,
-          kodObcePouzity: kodObce,
+          oboroveFiltrovano: !!naceList,
           firmy: subjekty,
         });
       } catch (e) {
-        return jsonResponse({ error: String(e) }, 500);
+        return jsonResponse(
+          {
+            error: String(e),
+            napoveda:
+              "Pokud chyba zmiňuje 'příliš mnoho výsledků', appka i tak filtrovala jen sledované obory — problém je v hodně velkém městě. Zkus zúžit přes ?nace=KOD1,KOD2 na jeden konkrétní obor, nebo doplň jméno firmy přes ?jmeno=.",
+          },
+          500
+        );
       }
     }
 

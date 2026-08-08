@@ -38,6 +38,16 @@
   button:disabled { background: #d1d5db; cursor: default; }
   .worker-url-row { margin-top: 10px; font-size: 13px; color: var(--muted); }
   .worker-url-row input { width: 100%; margin-top: 4px; font-size: 13px; padding: 6px 8px; }
+  .stat-tiles {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    gap: 8px; margin-top: 14px;
+  }
+  .stat-tile {
+    background: #faf9f7; border: 1px solid #eee6dd; border-radius: 10px;
+    padding: 10px 8px; text-align: center;
+  }
+  .stat-tile .num { font-size: 22px; font-weight: 700; line-height: 1.1; }
+  .stat-tile .lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
   .status { margin: 12px 0; color: var(--muted); font-size: 14px; }
   .level-group { margin-bottom: 24px; }
   .level-title {
@@ -138,8 +148,9 @@
       <input type="text" id="workerUrl" placeholder="https://tvuj-worker.tvuj-ucet.workers.dev" />
     </div>
     <div class="worker-url-row" style="margin-top:6px;">
-      ⚠️ v1.1: zobrazeny s.r.o., a.s., OSVČ a v.o.s./k.s. Obec, kterou appka ještě nezná, se teď zkusí dohledat automaticky — u nových obcí zkontroluj v nadpisu výsledků, že appka hledala tam, kde jsi čekal.
+      ⚠️ v1.2: appka defaultně hledá jen v ~15 sledovaných oborech (viz níže), aby se vešla pod limit ARES. Zobrazeny s.r.o., a.s., OSVČ a v.o.s./k.s. Nová obec — zkontroluj v nadpisu výsledků, kde appka reálně hledala.
     </div>
+    <div id="statTiles" class="stat-tiles" style="display:none;"></div>
   </div>
 
   <div id="status" class="status"></div>
@@ -336,7 +347,35 @@ function statusBarHtml(ico) {
   `;
 }
 
+function vykresliStatTiles(firmy) {
+  const tilesEl = document.getElementById("statTiles");
+  if (!firmy || !firmy.length) {
+    tilesEl.style.display = "none";
+    return;
+  }
+  const pocty = { 1: 0, 2: 0, 3: 0, 4: 0 };
+  let vyrizenoPocet = 0;
+  for (const f of firmy) {
+    pocty[f.uroven] = (pocty[f.uroven] || 0) + 1;
+    if (stavyMap[f.ico]?.status) vyrizenoPocet++;
+  }
+  const kratkeLabely = { 1: "Nejvhodnější", 2: "Dobří", 3: "Možní", 4: "Nevhodné" };
+  const dlazdice = [
+    { num: firmy.length, lbl: "Celkem načteno", color: "var(--ink)" },
+    { num: pocty[1], lbl: kratkeLabely[1], color: LEVELS[1].color },
+    { num: pocty[2], lbl: kratkeLabely[2], color: LEVELS[2].color },
+    { num: pocty[3], lbl: kratkeLabely[3], color: LEVELS[3].color },
+    { num: pocty[4], lbl: kratkeLabely[4], color: LEVELS[4].color },
+    { num: vyrizenoPocet, lbl: "Vyřízeno", color: "var(--accent)" },
+  ];
+  tilesEl.innerHTML = dlazdice
+    .map((d) => `<div class="stat-tile"><div class="num" style="color:${d.color}">${d.num}</div><div class="lbl">${d.lbl}</div></div>`)
+    .join("");
+  tilesEl.style.display = "grid";
+}
+
 function vykresli() {
+  vykresliStatTiles(vsechnyFirmy);
   let firmy = serazeneFirmy();
   resultsEl.innerHTML = "";
   if (!firmy.length) {
